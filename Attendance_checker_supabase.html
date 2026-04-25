@@ -332,7 +332,7 @@ function loadConfig() {
 
 // ─── DB helpers: map DB rows → app objects ─────────────────────────────────
 function dbPersonToApp(r) {
-  return { id: r.id, name: r.name, role: r.role, dept: r.dept||'—', photo: r.photo||'', authId: r.auth_id||null };
+  return { id: r.id, name: r.name, role: r.role, dept: r.dept||'—', photo: r.photo||'', email: r.email||'', authId: r.auth_id||null };
 }
 function dbLogToApp(r) {
   return { id: r.id, personId: r.person_id, date: r.date, in: r.time_in||'', out: r.time_out||'', lunchOut: r.lunch_out||'', lunchIn: r.lunch_in||'' };
@@ -378,26 +378,17 @@ function setState(patch) {
 // ─── Bootstrap: restore session → load data ────────────────────────────────
 async function bootstrap() {
   render(); // show loading screen
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    await loadUserProfile(session.user);
-  } else {
-    setState({ screen: 'login' });
-  }
-}
-
-async function loadUserProfile(authUser) {
-  const { data: person, error } = await sb
-    .from('people')
-    .select('*')
-    .eq('auth_id', authUser.id)
-    .single();
-  if (error || !person) {
-    await sb.auth.signOut();
-    setState({ screen: 'login', _error: 'Account not found in people table.' });
-    return;
-  }
-  await loadAllData(dbPersonToApp(person));
+  try {
+    const saved = JSON.parse(localStorage.getItem('att_session') || 'null');
+    if (saved?.id) {
+      const { data: person, error } = await sb.from('people').select('*').eq('id', saved.id).single();
+      if (!error && person) {
+        await loadAllData(dbPersonToApp(person));
+        return;
+      }
+    }
+  } catch(e){}
+  setState({ screen: 'login' });
 }
 
 async function loadAllData(person) {
@@ -484,23 +475,32 @@ function getNotifications() {
   return notifs;
 }
 
-// ─── Auth ──────────────────────────────────────────────────────────────────
+// ─── Auth (table-based — no Supabase Auth required) ───────────────────────
 async function doLogin() {
   const email = document.getElementById('li-email')?.value.trim();
   const pass  = document.getElementById('li-pass')?.value.trim();
   if (!email || !pass) { showToast('Enter email and password'); return; }
   setState({ _loading: true });
-  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
-  if (error) {
-    setState({ _loading: false, _error: error.message });
-    showToast('Login failed: ' + error.message);
+
+  const { data: person, error } = await sb
+    .from('people')
+    .select('*')
+    .eq('email', email)
+    .eq('pass', hashPw(pass))
+    .single();
+
+  if (error || !person) {
+    setState({ _loading: false, _error: 'Invalid email or password' });
+    showToast('Login failed: Invalid email or password');
     return;
   }
-  await loadUserProfile(data.user);
+  // Store session in localStorage so page refresh keeps you logged in
+  try { localStorage.setItem('att_session', JSON.stringify({ id: person.id })); } catch(e){}
+  await loadAllData(dbPersonToApp(person));
 }
 
 async function doLogout() {
-  await sb.auth.signOut();
+  try { localStorage.removeItem('att_session'); } catch(e){}
   setState({ screen:'login', user:null, navPage:'dashboard', modal:null, notifOpen:false, people:[], logs:[], leaves:[], _loading:false, _error:null });
 }
 
@@ -595,17 +595,13 @@ async function savePersonModal() {
   if (!name||!pass||!email) { showToast('Name, email, and password required'); return; }
   const photo = document.getElementById('pm-photo-data')?.value||'';
 
-  // 1. Create Supabase Auth user (requires service role key in production;
-  //    here we use signUp which works if email confirmations are disabled)
-  const { data: authData, error: authErr } = await sb.auth.admin
-    ? await sb.auth.admin.createUser({ email, password: pass, email_confirm: true })
-    : await sb.auth.signUp({ email, password: pass });
-  if (authErr) { showToast('Auth error: ' + authErr.message); return; }
-  const authId = authData?.user?.id;
+  // Check for duplicate email
+  const duplicate = state.people.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
+  if (duplicate) { showToast('A person with that email already exists'); return; }
 
-  // 2. Insert people row linked to auth user
+  // Store credentials directly in people table (table-based auth, no Supabase Auth needed)
   const { data, error } = await sb.from('people').insert({
-    name, role, dept, photo, auth_id: authId, pass: ''
+    name, role, dept, photo, email, pass: hashPw(pass)
   }).select().single();
   if (error) { showToast('DB error: ' + error.message); return; }
   setState({people:[...state.people, dbPersonToApp(data)], modal:null}); showToast(name+' added');
@@ -780,14 +776,17 @@ async function changePassword() {
   if (!cur||!nw||!cf) { showToast('Fill all fields'); return; }
   if (nw!==cf) { showToast('New passwords do not match'); return; }
   if (nw.length<6) { showToast('Password too short (min 6 chars)'); return; }
-  // Re-authenticate to verify current password
-  const { data: { user } } = await sb.auth.getUser();
-  const { data: sess } = await sb.auth.getSession();
-  const email = sess?.session?.user?.email;
-  if (!email) { showToast('Session error, please log in again'); return; }
-  const { error: verifyErr } = await sb.auth.signInWithPassword({ email, password: cur });
-  if (verifyErr) { showToast('Current password is incorrect'); return; }
-  const { error } = await sb.auth.updateUser({ password: nw });
+
+  // Verify current password against people table
+  const { data: person, error: verifyErr } = await sb
+    .from('people')
+    .select('id')
+    .eq('id', state.user.id)
+    .eq('pass', hashPw(cur))
+    .single();
+  if (verifyErr || !person) { showToast('Current password is incorrect'); return; }
+
+  const { error } = await sb.from('people').update({ pass: hashPw(nw) }).eq('id', state.user.id);
   if (error) { showToast('Error: ' + error.message); return; }
   setState({modal:null}); showToast('Password changed');
 }

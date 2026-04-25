@@ -535,8 +535,8 @@ async function quickScan(pid) {
     const lm = lunchDur(existing.lunchOut, time);
     showToast('✓ Back from lunch at '+ft(time)+(lm?' ('+lm+'m break)':''));
 
-  } else if (existing.lunchIn && !existing.out) {
-    // State 4: Check out (after lunch)
+  } else if ((existing.lunchIn || (!existing.lunchOut && !existing.lunchIn)) && existing.in && !existing.out) {
+    // State 4: Check out (after lunch, OR if lunch was skipped entirely)
     const { error } = await sb.from('logs').update({ time_out: time }).eq('id', existing.id);
     if (error) { showToast('DB error: ' + error.message); return; }
     setState({ logs: state.logs.map(l => l.id===existing.id ? {...l, out:time} : l) });
@@ -553,7 +553,7 @@ async function adminScan() {
 }
 
 // ─── Modal actions ─────────────────────────────────────────────────────────
-function openModal(type, id=null) { setState({modal:type, editId:id}); }
+function openModal(type, id=null) { setState({modal:type, editId:id!==null?+id:null}); }
 function closeModal() { setState({modal:null, editId:null, editPersonId:null}); }
 
 async function saveLogModal() {
@@ -565,12 +565,14 @@ async function saveLogModal() {
   const lunchIn = document.getElementById('m-lunchin')?.value||'';
   if (!pid||!date||!inn) { showToast('Fill person, date, and login time'); return; }
 
-  if (state.editId) {
+  const editId = state.editId !== null ? +state.editId : null;
+
+  if (editId !== null) {
     const { error } = await sb.from('logs').update({
       person_id:pid, date, time_in:inn, time_out:out, lunch_out:lunchOut, lunch_in:lunchIn
-    }).eq('id', state.editId);
+    }).eq('id', editId);
     if (error) { showToast('DB error: ' + error.message); return; }
-    const logs = state.logs.map(l => l.id===state.editId ? {...l,personId:pid,date,in:inn,out,lunchOut,lunchIn} : l);
+    const logs = state.logs.map(l => +l.id===editId ? {...l,personId:pid,date,in:inn,out,lunchOut,lunchIn} : l);
     setState({logs, modal:null, editId:null}); showToast('Entry updated');
   } else {
     const { data, error } = await sb.from('logs').insert({
@@ -581,9 +583,10 @@ async function saveLogModal() {
   }
 }
 async function deleteLog() {
-  const { error } = await sb.from('logs').delete().eq('id', state.editId);
+  const editId = +state.editId;
+  const { error } = await sb.from('logs').delete().eq('id', editId);
   if (error) { showToast('DB error: ' + error.message); return; }
-  setState({logs: state.logs.filter(l=>l.id!==state.editId), modal:null, editId:null}); showToast('Entry deleted');
+  setState({logs: state.logs.filter(l=>+l.id!==editId), modal:null, editId:null}); showToast('Entry deleted');
 }
 
 async function savePersonModal() {

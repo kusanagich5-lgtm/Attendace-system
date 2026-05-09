@@ -524,7 +524,8 @@ function getNotifications() {
   // pending schedule requests
   const pendingSchedReqs = state.scheduleRequests.filter(r=>r.status==='pending');
   if (pendingSchedReqs.length) notifs.push({type:'schedreqs', count:pendingSchedReqs.length});
-  if (pending.length) notifs.push({type:'leaves', count:pending.length});
+  const pendingLeaves = state.leaves.filter(l => l.status === 'pending');
+if (pendingLeaves.length) notifs.push({type:'leaves', count:pendingLeaves.length});
   // late arrivals today
   const lateToday = state.people.filter(p=>p.role!=='admin').filter(p=>{
     const log = todayLog(p.id);

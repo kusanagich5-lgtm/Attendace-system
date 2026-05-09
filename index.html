@@ -353,7 +353,12 @@ const lunchDur = (lo,li) => { if(!lo||!li) return null; const [loh,lom]=lo.split
 const fh = h => h===null||h===undefined?'—':h.toFixed(2)+'h';
 const nowT = () => { const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
 const avColor = r => r==='admin'?'#7c3aed':r==='employee'?'#16a34a':'#2563eb';
-const hashPw = s => btoa(s+'_att_salt_2025'); // simple obfuscation (use bcrypt in production)
+async function hashPw(s) {
+  const msgBuffer = new TextEncoder().encode(s + '_att_salt_2025');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -499,6 +504,10 @@ async function loadAllData(person) {
     teams: (teRes.data||[]).map(dbTeamToApp),
     trippings: (trRes.data||[]).map(dbTrippingToApp),
     shifts,
+    modal: null,
+    profileOpen: false,
+    notifOpen: false,
+    moreOpen: false,
     _error: null,
   });
 }
@@ -628,7 +637,7 @@ async function doLogin() {
     .from('people')
     .select('*')
     .eq('email', email)
-    .eq('pass', hashPw(pass))
+    .eq('pass', await hashPw(pass))
     .single();
 
   if (error || !person) {
@@ -750,7 +759,7 @@ async function savePersonModal() {
 
   // Store credentials directly in people table (table-based auth, no Supabase Auth needed)
   const { data, error } = await sb.from('people').insert({
-    name, role, dept, photo, email, pass: hashPw(pass)
+    name, role, dept, photo, email, pass: await hashPw(pass)
   }).select().single();
   if (error) { showToast('DB error: ' + error.message); return; }
   setState({people:[...state.people, dbPersonToApp(data)], modal:null}); showToast(name+' added');
@@ -1017,11 +1026,11 @@ async function changePassword() {
     .from('people')
     .select('id')
     .eq('id', state.user.id)
-    .eq('pass', hashPw(cur))
+    .eq('pass', await hashPw(cur))
     .single();
   if (verifyErr || !person) { showToast('Current password is incorrect'); return; }
 
-  const { error } = await sb.from('people').update({ pass: hashPw(nw) }).eq('id', state.user.id);
+  const { error } = await sb.from('people').update({ pass: await hashPw(nw) }).eq('id', state.user.id);
   if (error) { showToast('Error: ' + error.message); return; }
   setState({modal:null}); showToast('Password changed');
 }

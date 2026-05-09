@@ -1400,6 +1400,45 @@ function renderModal() {
   }
 
 
+  if (state.modal==='schedreqpreview') {
+    const reqId = state._previewReqId;
+    const req = state.scheduleRequests.find(r=>r.id===reqId);
+    if (!req) return '';
+    const p = personOf(req.personId);
+    const entries = parseSchedReqDays(req.preferredDays);
+    const locIcon = loc => loc==='field'?'🚗':loc==='remote'?'🏠':'🏢';
+    const locLabel = loc => loc==='field'?'Field':loc==='remote'?'Remote':'Office';
+    const entryRows = entries.length
+      ? entries.map(e=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:6px;background:var(--bg);">
+            <div style="width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0;"></div>
+            <div style="flex:1;">
+              <span style="font-weight:600;font-size:13px;">${e.day}</span>
+              <span style="color:var(--text-secondary);font-size:12px;margin-left:8px;">${locIcon(e.location)} ${locLabel(e.location)}</span>
+              ${e.startTime?`<span style="color:var(--text-secondary);font-size:12px;margin-left:6px;">· ${e.startTime}–${e.endTime}</span>`:''}
+            </div>
+          </div>`).join('')
+      : `<div class="empty-state">Could not parse days from this request. Try editing manually.</div>`;
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:440px;">
+      <div class="modal-header"><div class="modal-title">📅 Add Schedule from Request</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+        ${avatarHTML(p,'av-xs')}
+        <div><div style="font-weight:600;">${esc(p.name)}</div><div style="font-size:12px;color:var(--text-secondary);">${req.note||'No notes'}</div></div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
+        ${entries.length} day${entries.length!==1?'s':''} will be added as weekly recurring shifts
+      </div>
+      ${entryRows}
+      <div style="font-size:12px;color:var(--text-secondary);margin:12px 0 16px;padding:10px 12px;background:var(--blue-light);border-radius:var(--radius-sm);border:1px solid var(--blue-mid);">
+        💡 Each entry will be set to <strong>weekly repeat</strong>, starting next week. You can edit any entry afterwards from the Schedule page.
+      </div>
+      <div class="modal-footer">
+        ${entries.length?`<button class="btn btn-primary" style="flex:1" onclick="addAllSchedFromReq(${reqId})">✓ Add all ${entries.length} entr${entries.length===1?'y':'ies'}</button>`:''}
+        <button class="btn" onclick="closeModal()">Cancel</button>
+      </div>
+    </div></div>`;
+  }
+
   if (state.modal==='changepass') {
     return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
       <div class="modal-header"><div class="modal-title">Change password</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
@@ -2293,8 +2332,86 @@ function adminSchedRequests() {
 function openSchedModalFromReq(reqId) {
   const req = state.scheduleRequests.find(r=>r.id===reqId);
   if (!req) return;
-  // Pre-fill schedule modal with this request's info, assigned to person
-  setState({modal:'sched', editSchedId:null, schedPickDate:TODAY, _prefillReq: req});
+  setState({modal:'schedreqpreview', _previewReqId: reqId});
+}
+
+// Parse "Monday (🏢 Office 09:00–18:00), Wednesday (🚗 Field 08:00–17:00)" into structured entries
+function parseSchedReqDays(preferredDays) {
+  const dayMap = {monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6,sunday:0};
+  const entries = [];
+  // Split by day name boundaries
+  const parts = preferredDays.split(/,\s*(?=Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i);
+  for (const part of parts) {
+    const m = part.match(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*\(([^)]*)\)/i);
+    if (!m) continue;
+    const dayName = m[1].toLowerCase();
+    const detail = m[2];
+    const locMatch = detail.match(/(office|field|remote)/i);
+    const timeMatch = detail.match(/(\d{1,2}:\d{2})[–\-](\d{1,2}:\d{2})/);
+    entries.push({
+      day: m[1],
+      dayNum: dayMap[dayName],
+      location: locMatch ? locMatch[1].toLowerCase() : 'office',
+      startTime: timeMatch ? timeMatch[1] : '',
+      endTime: timeMatch ? timeMatch[2] : '',
+    });
+  }
+  return entries;
+}
+
+// Get the next occurrence of a weekday (0=Sun…6=Sat) on or after a base date
+function nextWeekday(dayNum, baseDate) {
+  const d = new Date(baseDate);
+  const diff = (dayNum - d.getDay() + 7) % 7;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split('T')[0];
+}
+
+async function addAllSchedFromReq(reqId) {
+  const req = state.scheduleRequests.find(r=>r.id===reqId);
+  if (!req) return;
+  const entries = parseSchedReqDays(req.preferredDays);
+  if (!entries.length) { showToast('Could not parse any days from this request'); return; }
+
+  const p = state.people.find(x=>x.id===req.personId);
+  const personName = p ? p.name.split(' ')[0] : 'Staff';
+  const baseDate = new Date();
+  // Find Monday of the coming week to anchor the schedule
+  const daysUntilMonday = (8 - baseDate.getDay()) % 7 || 7;
+  const weekStart = new Date(baseDate);
+  weekStart.setDate(baseDate.getDate() + daysUntilMonday);
+
+  const insertPayloads = entries.map(e => {
+    const date = nextWeekday(e.dayNum, weekStart);
+    const locLabel = e.location==='field'?'Field':e.location==='remote'?'Remote':'Office';
+    return {
+      title: `${personName} – ${locLabel} Shift`,
+      type: 'shift',
+      location: e.location,
+      person_ids: JSON.stringify([req.personId]),
+      date,
+      repeat: 'weekly',
+      start_time: e.startTime,
+      end_time: e.endTime,
+      note: req.note||''
+    };
+  });
+
+  let addedCount = 0;
+  const newScheds = [...state.schedules];
+  for (const payload of insertPayloads) {
+    const { data, error } = await sb.from('schedules').insert(payload).select().single();
+    if (error) { showToast('DB error: ' + error.message); continue; }
+    newScheds.push(dbSchedToApp(data));
+    addedCount++;
+  }
+
+  // Mark request as reviewed
+  await sb.from('schedule_requests').update({status:'reviewed'}).eq('id', reqId);
+  const updatedReqs = state.scheduleRequests.map(r=>r.id===reqId?{...r,status:'reviewed'}:r);
+
+  setState({schedules: newScheds, scheduleRequests: updatedReqs, modal: null, _previewReqId: null});
+  showToast(`Added ${addedCount} schedule entr${addedCount===1?'y':'ies'} (weekly, starting next week)`);
 }
 
 // ─── Admin: Teams page ─────────────────────────────────────────────────────
@@ -2385,7 +2502,7 @@ Object.assign(window, {
   handlePhotoUpload, renderPwStrength,
   exportCSV, exportXLSX,
   // New functions
-  saveScheduleRequest, approveSchedReq, dismissSchedReq, openSchedModalFromReq,
+  saveScheduleRequest, approveSchedReq, dismissSchedReq, openSchedModalFromReq, addAllSchedFromReq,
   saveTeamModal, deleteTeam, toggleTeamChip,
   startCamera, capturePhoto, retakePhoto, handleCheckinUpload, submitCheckinPhoto, closeCheckinModal,
 });

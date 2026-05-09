@@ -1,0 +1,2344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --border: #e2e4e9;
+  --border-light: #eef0f3;
+  --text: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --blue: #2563eb;
+  --blue-light: #eff6ff;
+  --blue-mid: #bfdbfe;
+  --green: #16a34a;
+  --green-light: #f0fdf4;
+  --green-mid: #bbf7d0;
+  --red: #dc2626;
+  --red-light: #fef2f2;
+  --red-mid: #fecaca;
+  --amber: #d97706;
+  --amber-light: #fffbeb;
+  --amber-mid: #fde68a;
+  --purple: #7c3aed;
+  --purple-light: #f5f3ff;
+  --purple-mid: #ddd6fe;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+input, select, textarea { font-family: inherit; font-size: 13px; }
+
+/* Layout */
+#app { min-height: 100vh; }
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+.topbar-brand { display: flex; align-items: center; gap: 10px; }
+.brand-icon { width: 32px; height: 32px; background: var(--blue); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.brand-icon svg { display: block; }
+.brand-name { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -.02em; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.user-info { text-align: right; }
+.user-info .name { font-size: 13px; font-weight: 500; }
+.user-info .sub { font-size: 11px; color: var(--text-secondary); }
+.notif-btn { position: relative; width: 34px; height: 34px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.notif-btn:hover { background: var(--bg); }
+.notif-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; background: var(--red); border-radius: 50%; border: 1.5px solid var(--surface); }
+
+.layout { display: flex; height: calc(100vh - 56px); }
+.sidenav { width: 200px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); padding: 16px 0; overflow-y: auto; }
+.nav-section-label { font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; padding: 0 16px 6px; margin-top: 8px; }
+.nav-item { display: flex; align-items: center; gap: 9px; padding: 9px 16px; font-size: 13px; color: var(--text-secondary); cursor: pointer; border-left: 2.5px solid transparent; transition: all .12s; }
+.nav-item:hover { background: var(--bg); color: var(--text); }
+.nav-item.active { color: var(--blue); border-left-color: var(--blue); background: var(--blue-light); font-weight: 500; }
+.nav-icon { width: 16px; height: 16px; flex-shrink: 0; opacity: .65; }
+.nav-item.active .nav-icon { opacity: 1; }
+.main { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.card-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.card-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all .12s; white-space: nowrap; }
+.btn:hover { background: var(--bg); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-danger { background: var(--red-light); color: var(--red); border-color: var(--red-mid); }
+.btn-danger:hover { background: var(--red-mid); }
+.btn-success { background: var(--green-light); color: var(--green); border-color: var(--green-mid); }
+.btn-success:hover { background: var(--green-mid); }
+.btn-warning { background: var(--amber-light); color: var(--amber); border-color: var(--amber-mid); }
+.btn-warning:hover { background: var(--amber-mid); }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-lg { padding: 10px 20px; font-size: 14px; }
+.btn-full { width: 100%; }
+.btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Badges */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; }
+.badge-admin { background: var(--purple-light); color: var(--purple); }
+.badge-employee { background: var(--green-light); color: var(--green); }
+.badge-intern { background: var(--blue-light); color: var(--blue); }
+.badge-in { background: var(--green-light); color: var(--green); }
+.badge-lunch { background: var(--amber-light); color: var(--amber); }
+.badge-out { background: var(--bg); color: var(--text-secondary); border: 1px solid var(--border); }
+.badge-absent { background: var(--red-light); color: var(--red); }
+.badge-late { background: var(--amber-light); color: var(--amber); }
+.badge-overtime { background: var(--purple-light); color: var(--purple); }
+.badge-pending { background: var(--amber-light); color: var(--amber); }
+.badge-approved { background: var(--green-light); color: var(--green); }
+.badge-rejected { background: var(--red-light); color: var(--red); }
+
+/* Stats grid */
+.stats-grid { display: grid; gap: 12px; margin-bottom: 16px; }
+.stats-grid-4 { grid-template-columns: repeat(4,1fr); }
+.stats-grid-3 { grid-template-columns: repeat(3,1fr); }
+.stats-grid-2 { grid-template-columns: repeat(2,1fr); }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); }
+.stat-num { font-size: 26px; font-weight: 600; color: var(--text); line-height: 1; }
+.stat-lbl { font-size: 11px; color: var(--text-secondary); margin-top: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+.stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+/* Table */
+.tbl-wrap { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 8px 10px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+.tbl td { padding: 10px 10px; border-bottom: 1px solid var(--border-light); color: var(--text); vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: var(--bg); }
+.tbl-person { display: flex; align-items: center; gap: 8px; }
+
+/* Avatar */
+.avatar { border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #fff; flex-shrink: 0; font-size: 11px; overflow: hidden; }
+.av-lg { width: 52px; height: 52px; font-size: 18px; }
+.av-md { width: 36px; height: 36px; font-size: 13px; }
+.av-sm { width: 28px; height: 28px; font-size: 10px; }
+.av-xs { width: 22px; height: 22px; font-size: 9px; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Forms */
+.form-group { margin-bottom: 12px; }
+.form-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .05em; display: block; margin-bottom: 4px; }
+.form-input { width: 100%; padding: 8px 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 13px; font-family: inherit; transition: border-color .12s; }
+.form-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.filter-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+.filter-bar .form-group { margin: 0; }
+.filter-bar .form-input { min-width: 120px; }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; backdrop-filter: blur(2px); }
+.modal { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 22px 24px; width: 100%; max-width: 420px; box-shadow: var(--shadow-md); max-height: 90vh; overflow-y: auto; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.modal-title { font-size: 15px; font-weight: 600; }
+.modal-footer { display: flex; gap: 8px; margin-top: 18px; }
+
+/* Toast */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111827; color: #fff; padding: 10px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 9999; white-space: nowrap; box-shadow: var(--shadow-md); }
+.toast.show { opacity: 1; }
+
+/* Notifications panel */
+.notif-panel { position: absolute; top: 50px; right: 0; width: 320px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); z-index: 200; }
+.notif-header { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; }
+.notif-item { padding: 12px 16px; border-bottom: 1px solid var(--border-light); }
+.notif-item:last-child { border-bottom: none; }
+.notif-item-title { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+.notif-item-sub { font-size: 11px; color: var(--text-secondary); }
+.notif-empty { padding: 24px 16px; text-align: center; color: var(--text-muted); font-size: 12px; }
+
+/* Calendar */
+.cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; }
+.cal-day-hdr { text-align: center; font-size: 10px; font-weight: 600; color: var(--text-muted); padding: 4px; text-transform: uppercase; letter-spacing: .05em; }
+.cal-cell { aspect-ratio: 1; border-radius: var(--radius-sm); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all .1s; }
+.cal-cell:hover { border-color: var(--border); background: var(--bg); }
+.cal-cell.other-month { color: var(--text-muted); }
+.cal-cell.today { border-color: var(--blue); }
+.cal-cell.has-in { background: var(--green-light); color: var(--green); }
+.cal-cell.has-late { background: var(--amber-light); color: var(--amber); }
+.cal-cell.has-absent { background: var(--red-light); color: var(--red); }
+.cal-cell.empty { background: transparent; cursor: default; }
+.cal-dot { width: 4px; height: 4px; border-radius: 50%; margin-top: 2px; }
+.cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.cal-nav-title { font-size: 14px; font-weight: 600; }
+
+/* Hpill */
+.hpill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; }
+.hpill-done { background: var(--green-light); color: var(--green); }
+.hpill-active { background: var(--amber-light); color: var(--amber); }
+.hpill-late { background: var(--red-light); color: var(--red); }
+.hpill-ot { background: var(--purple-light); color: var(--purple); }
+
+/* QR Box */
+.qr-box { width: 140px; height: 140px; margin: 0 auto 16px; border: 2px dashed var(--border); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: all .15s; }
+.qr-box:hover, .qr-box.scanning { border-color: var(--blue); border-style: solid; background: var(--blue-light); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+.qr-box.scanning { animation: pulse 1s infinite; }
+
+/* Leave request card */
+.leave-card { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 8px; }
+.leave-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.leave-card-name { font-size: 13px; font-weight: 500; }
+.leave-card-meta { font-size: 11px; color: var(--text-secondary); margin-bottom: 8px; }
+.leave-card-reason { font-size: 12px; color: var(--text); background: var(--bg); padding: 8px 10px; border-radius: var(--radius-sm); }
+
+/* Password strength */
+.pw-strength { height: 3px; border-radius: 99px; background: var(--border); margin-top: 4px; overflow: hidden; }
+.pw-strength-bar { height: 100%; border-radius: 99px; transition: width .3s, background .3s; }
+
+/* Profile photo area */
+.photo-upload { width: 80px; height: 80px; border-radius: 50%; border: 2px dashed var(--border); display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; position: relative; flex-shrink: 0; }
+.photo-upload:hover { border-color: var(--blue); }
+.photo-upload img { width: 100%; height: 100%; object-fit: cover; }
+.photo-upload-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; border-radius: 50%; }
+.photo-upload:hover .photo-upload-overlay { opacity: 1; }
+
+/* Dept bar chart */
+.dept-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.dept-bar-label { font-size: 12px; color: var(--text-secondary); width: 90px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dept-bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+.dept-bar-fill { height: 100%; border-radius: 99px; background: var(--blue); }
+.dept-bar-val { font-size: 12px; font-weight: 500; color: var(--text); width: 40px; text-align: right; flex-shrink: 0; }
+
+/* Shift settings */
+.shift-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 8px; }
+.shift-row label { font-size: 12px; font-weight: 500; min-width: 70px; }
+
+/* Schedule planner */
+.sched-week { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; margin-bottom: 16px; }
+.sched-day-col { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.sched-day-hdr { background: var(--bg); padding: 7px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); text-align: center; border-bottom: 1px solid var(--border); }
+.sched-day-hdr.today-hdr { background: var(--blue-light); color: var(--blue); }
+.sched-day-body { padding: 6px; min-height: 80px; }
+.sched-entry { background: var(--blue-light); border: 1px solid var(--blue-mid); border-radius: 4px; padding: 4px 6px; margin-bottom: 4px; font-size: 10px; color: var(--blue); cursor: pointer; }
+.sched-entry:hover { background: var(--blue-mid); }
+.sched-entry.type-shift { background: var(--green-light); border-color: var(--green-mid); color: var(--green); }
+.sched-entry.type-meeting { background: var(--purple-light); border-color: var(--purple-mid); color: var(--purple); }
+.sched-entry.type-event { background: var(--amber-light); border-color: var(--amber-mid); color: var(--amber); }
+.sched-entry.type-offday { background: var(--red-light); border-color: var(--red-mid); color: var(--red); }
+.sched-entry-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-entry-time { opacity: .75; margin-top: 1px; }
+.sched-add-btn { width: 100%; background: none; border: 1px dashed var(--border); border-radius: 4px; padding: 5px; font-size: 11px; color: var(--text-muted); cursor: pointer; margin-top: 2px; }
+.sched-add-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
+.sched-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; margin-top: 6px; }
+.sched-legend-item { display: flex; align-items: center; gap: 5px; }
+.sched-legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+.sched-member-view { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px; }
+.sched-member-date { min-width: 44px; text-align: center; font-size: 11px; color: var(--text-secondary); }
+.sched-member-day { font-size: 18px; font-weight: 700; color: var(--text); line-height: 1; }
+.sched-member-entries { flex: 1; }
+.cal-cell.has-sched { outline: 2px solid var(--purple); outline-offset: -2px; }
+.sched-week-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.sched-week-nav-title { font-size: 14px; font-weight: 600; }
+
+/* Multi-person chip picker */
+.chip-picker { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 5px; background: var(--surface); cursor: text; min-height: 38px; }
+.chip-picker:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 500; cursor: pointer; user-select: none; transition: all .1s; }
+.chip-all { background: var(--blue-light); color: var(--blue); border: 1px solid var(--blue-mid); }
+.chip-person { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+.chip-person.selected { background: var(--green-light); color: var(--green); border-color: var(--green-mid); }
+.chip-person:hover { border-color: var(--blue); }
+.chip-all.selected { background: var(--blue); color: #fff; border-color: var(--blue); }
+.chip-remove { font-size: 10px; opacity: .6; margin-left: 2px; }
+.chip-remove:hover { opacity: 1; }
+
+/* Misc */
+.sep { height: 1px; background: var(--border); margin: 16px 0; }
+.text-sm { font-size: 12px; }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+.text-success { color: var(--green); }
+.text-danger { color: var(--red); }
+.text-mono { font-family: 'DM Mono', monospace; font-size: 12px; }
+.flex { display: flex; }
+.items-center { align-items: center; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.mb-1 { margin-bottom: 4px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-3 { margin-bottom: 12px; }
+.empty-state { text-align: center; padding: 32px 16px; color: var(--text-muted); font-size: 13px; }
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%); padding: 20px; }
+.login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px; width: 100%; max-width: 380px; box-shadow: var(--shadow-md); }
+.role-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 18px; }
+.role-opt { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 8px; text-align: center; cursor: pointer; transition: all .12s; }
+.role-opt:hover { border-color: var(--blue-mid); background: var(--blue-light); }
+.role-opt.selected { border: 2px solid var(--blue); background: var(--blue-light); }
+.role-opt-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; font-size: 13px; font-weight: 600; color: #fff; }
+.role-opt-label { font-size: 11px; font-weight: 500; color: var(--text); }
+.demo-box { margin-top: 14px; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); font-size: 11px; color: var(--text-secondary); line-height: 1.8; }
+.demo-box strong { color: var(--text); font-weight: 500; }
+
+/* Mobile bottom nav */
+.mobile-nav { display:none; position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); z-index:200; padding:6px 0 env(safe-area-inset-bottom,0); }
+.mobile-nav-inner { display:flex; justify-content:space-around; }
+.mobile-nav-item { display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 8px; cursor:pointer; color:var(--text-muted); min-width:52px; }
+.mobile-nav-item.active { color:var(--blue); }
+.mobile-nav-item svg { width:20px; height:20px; }
+.mobile-nav-item span { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+.mobile-more-panel { display:none; position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); border-radius:16px 16px 0 0; z-index:300; padding:12px 0 env(safe-area-inset-bottom,0); max-height:60vh; overflow-y:auto; }
+.mobile-more-panel.open { display:block; }
+.mobile-more-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:299; }
+.mobile-more-overlay.open { display:block; }
+.mobile-more-item { display:flex; align-items:center; gap:12px; padding:13px 20px; font-size:14px; color:var(--text); cursor:pointer; }
+.mobile-more-item.active { color:var(--blue); font-weight:500; }
+.mobile-more-item svg { width:18px; height:18px; }
+.mobile-more-handle { width:36px; height:4px; background:var(--border); border-radius:99px; margin:0 auto 12px; }
+
+@media(max-width:768px){
+  .stats-grid-4{grid-template-columns:repeat(2,1fr);}
+  .stats-grid-3{grid-template-columns:repeat(2,1fr);}
+  .sidenav{display:none;}
+  .main{padding:16px 12px 80px;}
+  .mobile-nav{display:block;}
+  .topbar{padding:0 14px;}
+  .sched-week{grid-template-columns:repeat(7,1fr);font-size:10px;}
+  .filter-bar{flex-direction:column;align-items:stretch;}
+  .filter-bar .form-input{min-width:unset;width:100%;}
+  .form-row{grid-template-columns:1fr;}
+  .stats-grid-2{grid-template-columns:1fr 1fr;}
+  .tbl th,.tbl td{padding:8px 6px;font-size:12px;}
+  .card{padding:14px 14px;}
+}
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const TODAY = new Date().toISOString().split('T')[0];
+const gi = n => (n||'?').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase();
+const ft = t => { if(!t) return '—'; const [h,m]=t.split(':'); const ap=+h>=12?'PM':'AM'; return ((+h%12)||12)+':'+m+' '+ap; };
+const ch = (i,o,lo,li) => { if(!i||!o) return null; const [ih,im]=i.split(':').map(Number),[oh,om]=o.split(':').map(Number); let d=(oh*60+om)-(ih*60+im); if(lo&&li){const[loh,lom]=lo.split(':').map(Number),[lih,lim]=li.split(':').map(Number);const lb=(lih*60+lim)-(loh*60+lom);if(lb>0)d-=lb;} return d>0?d/60:null; };
+const lunchDur = (lo,li) => { if(!lo||!li) return null; const [loh,lom]=lo.split(':').map(Number),[lih,lim]=li.split(':').map(Number); const m=(lih*60+lim)-(loh*60+lom); return m>0?m:null; };
+const fh = h => h===null||h===undefined?'—':h.toFixed(2)+'h';
+const nowT = () => { const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+const avColor = r => r==='admin'?'#7c3aed':r==='employee'?'#16a34a':'#2563eb';
+const hashPw = s => btoa(s+'_att_salt_2025'); // simple obfuscation (use bcrypt in production)
+const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// ─── Supabase config ───────────────────────────────────────────────────────
+// ⚠️  PASTE YOUR VALUES BELOW BEFORE OPENING THE FILE
+const SUPABASE_URL  = 'https://aijmpykzepgrgruzoxfb.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFpam1weWt6ZXBncmdydXpveGZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwOTc3NDIsImV4cCI6MjA5MjY3Mzc0Mn0.RJgPzNOV4vx1TnhIEtW_XGOVC-vVlORnc1FVqzMl_oM';
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ─── Local-only config (only UI preferences) ─────────────────────
+const LS_CONFIG_KEY = 'att_sys_config_v4';
+function saveConfig() {
+  try {
+    localStorage.setItem(LS_CONFIG_KEY, JSON.stringify({
+      schedWeekOffset: state.schedWeekOffset,
+      calYear: state.calYear,
+      calMonth: state.calMonth,
+    }));
+  } catch(e){}
+}
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem(LS_CONFIG_KEY)||'null'); } catch(e){ return null; }
+}
+
+// ─── DB helpers: map DB rows → app objects ─────────────────────────────────
+function dbPersonToApp(r) {
+  return { id: r.id, name: r.name, role: r.role, dept: r.dept||'—', photo: r.photo||'', email: r.email||'', authId: r.auth_id||null };
+}
+function dbLogToApp(r) {
+  return { id: r.id, personId: r.person_id, date: r.date, in: r.time_in||'', out: r.time_out||'', lunchOut: r.lunch_out||'', lunchIn: r.lunch_in||'', photo: r.checkin_photo||'' };
+}
+function dbLeaveToApp(r) {
+  return { id: r.id, personId: r.person_id, type: r.type, from: r.from_date, to: r.to_date, reason: r.reason||'', status: r.status||'pending', date: r.filed_date||TODAY };
+}
+function dbSchedToApp(r) {
+  let personIds = [];
+  try { personIds = r.person_ids ? JSON.parse(r.person_ids) : []; } catch(e){}
+  return { id: r.id, title: r.title, type: r.type||'shift', personIds, date: r.date, repeat: r.repeat||'none', startTime: r.start_time||'', endTime: r.end_time||'', note: r.note||'' };
+}
+function dbSchedReqToApp(r) {
+  return { id: r.id, personId: r.person_id, preferredDays: r.preferred_days||'', preferredStart: r.preferred_start||'', preferredEnd: r.preferred_end||'', note: r.note||'', status: r.status||'pending', createdAt: r.created_at||'' };
+}
+function dbShiftToApp(r) {
+  return { startTime: r.start_time||'09:00', endTime: r.end_time||'18:00', maxHours: r.max_hours||9 };
+}
+function dbTeamToApp(r) {
+  let memberIds = [];
+  try { memberIds = r.member_ids ? JSON.parse(r.member_ids) : []; } catch(e){}
+  return { id: r.id, name: r.name, color: r.color||'#2563eb', memberIds };
+}
+
+// ─── State ─────────────────────────────────────────────────────────────────
+const _cfg = loadConfig();
+const defaultShifts = { startTime:'09:00', endTime:'18:00', maxHours:9 };
+let state = {
+  screen: 'loading',
+  user: null,
+  loginRole: 'employee',
+  navPage: 'dashboard',
+  people: [],
+  logs: [],
+  leaves: [],
+  schedules: [],
+  scheduleRequests: [],
+  teams: [],
+  shifts: defaultShifts,
+  modal: null,
+  editId: null,
+  scanIdx: 0,
+  filterPerson:'', filterRole:'', filterFrom:'', filterTo:'',
+  sfFrom:'', sfTo:'',
+  calYear: _cfg?.calYear || new Date().getFullYear(),
+  calMonth: _cfg?.calMonth || new Date().getMonth(),
+  notifOpen: false,
+  editPersonId: null,
+  schedWeekOffset: _cfg?.schedWeekOffset || 0,
+  editSchedId: null,
+  _loading: false,
+  _error: null,
+  moreOpen: false,
+  editTeamId: null,
+  _pendingCheckinPid: null,
+  _prefillReq: null,
+};
+
+function setState(patch) {
+  Object.assign(state, patch);
+  saveConfig();
+  render();
+}
+
+// ─── Bootstrap: restore session → load data ────────────────────────────────
+async function bootstrap() {
+  render(); // show loading screen
+  try {
+    const saved = JSON.parse(localStorage.getItem('att_session') || 'null');
+    if (saved?.id) {
+      const { data: person, error } = await sb.from('people').select('*').eq('id', saved.id).single();
+      if (!error && person) {
+        await loadAllData(dbPersonToApp(person));
+        return;
+      }
+    }
+  } catch(e){}
+  setState({ screen: 'login' });
+}
+
+async function loadAllData(person) {
+  const [pRes, lRes, lvRes, scRes, srRes, teRes, shRes] = await Promise.all([
+    sb.from('people').select('*').order('id'),
+    sb.from('logs').select('*').order('date', { ascending: false }),
+    sb.from('leaves').select('*').order('filed_date', { ascending: false }),
+    sb.from('schedules').select('*').order('date', { ascending: true }),
+    sb.from('schedule_requests').select('*').order('created_at', { ascending: false }),
+    sb.from('teams').select('*').order('id'),
+    sb.from('shifts').select('*').limit(1).single(),
+  ]);
+  let shifts = defaultShifts;
+  if (shRes.data) shifts = dbShiftToApp(shRes.data);
+  setState({
+    screen: 'app',
+    user: person,
+    navPage: 'dashboard',
+    people: (pRes.data||[]).map(dbPersonToApp),
+    logs:   (lRes.data||[]).map(dbLogToApp),
+    leaves: (lvRes.data||[]).map(dbLeaveToApp),
+    schedules: (scRes.data||[]).map(dbSchedToApp),
+    scheduleRequests: (srRes.data||[]).map(dbSchedReqToApp),
+    teams: (teRes.data||[]).map(dbTeamToApp),
+    shifts,
+    _error: null,
+  });
+}
+function personOf(id) { return state.people.find(p=>p.id===id)||{name:'Unknown',role:'—',dept:'—',photo:''}; }
+function myLogs(pid) { return state.logs.filter(l=>l.personId===pid).sort((a,b)=>b.date.localeCompare(a.date)); }
+function todayLog(pid) { return state.logs.find(l=>l.personId===pid&&l.date===TODAY); }
+function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
+
+// ─── Shift/late/overtime logic ─────────────────────────────────────────────
+
+// Returns the scheduled start time (HH:MM) for a person on a given date,
+// or falls back to the global shift start time.
+function getScheduledStart(personId, date) {
+  if (personId && date) {
+    // Find a 'shift' type schedule entry assigned to this person on this date
+    const entries = schedForDate(date, personId).filter(s => s.type === 'shift' && s.startTime);
+    if (entries.length > 0) return entries[0].startTime;
+  }
+  return state.shifts.startTime;
+}
+
+// isLate now accepts optional (personId, date) to use the person's scheduled start.
+// Falls back to global shift start when no personal schedule exists.
+function isLate(inTime, personId, date) {
+  if (!inTime) return false;
+  const startTime = getScheduledStart(personId || null, date || null);
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [ih, im] = inTime.split(':').map(Number);
+  return (ih * 60 + im) > (sh * 60 + sm + 5); // 5 min grace
+}
+
+function isOvertime(hours) {
+  return hours !== null && hours > state.shifts.maxHours;
+}
+
+function lateMinutes(inTime, personId, date) {
+  if (!inTime) return 0;
+  const startTime = getScheduledStart(personId || null, date || null);
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [ih, im] = inTime.split(':').map(Number);
+  return Math.max(0, (ih * 60 + im) - (sh * 60 + sm));
+}
+
+// ─── Notifications ─────────────────────────────────────────────────────────
+function getNotifications() {
+  const notifs = [];
+  // forgot to check out — still logged in (in but no out)
+  state.people.filter(p=>p.role!=='admin').forEach(p=>{
+    const log = todayLog(p.id);
+    if (log && log.in && !log.out) {
+      const [ih,im] = log.in.split(':').map(Number);
+      const now = new Date();
+      const nowM = now.getHours()*60+now.getMinutes();
+      const [eh,em] = state.shifts.endTime.split(':').map(Number);
+      if (nowM > eh*60+em+30) {
+        notifs.push({type:'forgot_out', name:p.name, time:ft(log.in), personId:p.id});
+      }
+    }
+  });
+  // pending schedule requests
+  const pendingSchedReqs = state.scheduleRequests.filter(r=>r.status==='pending');
+  if (pendingSchedReqs.length) notifs.push({type:'schedreqs', count:pendingSchedReqs.length});
+  const pendingLeaves = state.leaves.filter(l=>l.status==='pending');
+  if (pendingLeaves.length) notifs.push({type:'leaves', count:pendingLeaves.length});
+  // late arrivals today
+  const lateToday = state.people.filter(p=>p.role!=='admin').filter(p=>{
+    const log = todayLog(p.id);
+    return log && isLate(log.in, p.id, TODAY);
+  });
+  if (lateToday.length) notifs.push({type:'late', names:lateToday.map(p=>p.name), count:lateToday.length});
+  return notifs;
+}
+
+// ─── Auth (table-based — no Supabase Auth required) ───────────────────────
+async function doLogin() {
+  const email = document.getElementById('li-email')?.value.trim();
+  const pass  = document.getElementById('li-pass')?.value.trim();
+  if (!email || !pass) { showToast('Enter email and password'); return; }
+  setState({ _loading: true });
+
+  const { data: person, error } = await sb
+    .from('people')
+    .select('*')
+    .eq('email', email)
+    .eq('pass', hashPw(pass))
+    .single();
+
+  if (error || !person) {
+    setState({ _loading: false, _error: 'Invalid email or password' });
+    showToast('Login failed: Invalid email or password');
+    return;
+  }
+  // Store session in localStorage so page refresh keeps you logged in
+  try { localStorage.setItem('att_session', JSON.stringify({ id: person.id })); } catch(e){}
+  await loadAllData(dbPersonToApp(person));
+}
+
+async function doLogout() {
+  try { localStorage.removeItem('att_session'); } catch(e){}
+  setState({ screen:'login', user:null, navPage:'dashboard', modal:null, notifOpen:false, people:[], logs:[], leaves:[], _loading:false, _error:null });
+}
+
+// ─── Check in/out ──────────────────────────────────────────────────────────
+async function quickScan(pid, checkinPhoto) {
+  const existing = todayLog(pid);
+  const time = nowT();
+
+  if (!existing || !existing.in) {
+    // State 1: Check in — requires photo
+    if (!checkinPhoto) {
+      // Open photo capture modal
+      setState({ modal: 'checkin_photo', _pendingCheckinPid: pid });
+      return;
+    }
+    const { data, error } = await sb.from('logs').insert({
+      person_id: pid, date: TODAY, time_in: time, time_out: '', lunch_out: '', lunch_in: '', checkin_photo: checkinPhoto||''
+    }).select().single();
+    if (error) { showToast('DB error: ' + error.message); return; }
+    const logs = [...state.logs, dbLogToApp(data)];
+    setState({ logs, modal: null, _pendingCheckinPid: null });
+    showToast(isLate(time, pid, TODAY) ? '⚠ Checked in (late) at '+ft(time) : '✓ Checked in at '+ft(time));
+
+  } else if (existing.in && !existing.lunchOut && !existing.out) {
+    // State 2: Go to lunch
+    const { error } = await sb.from('logs').update({ lunch_out: time }).eq('id', existing.id);
+    if (error) { showToast('DB error: ' + error.message); return; }
+    setState({ logs: state.logs.map(l => l.id===existing.id ? {...l, lunchOut:time} : l) });
+    showToast('🍽 Lunch break started at '+ft(time));
+
+  } else if (existing.lunchOut && !existing.lunchIn && !existing.out) {
+    // State 3: Back from lunch
+    const { error } = await sb.from('logs').update({ lunch_in: time }).eq('id', existing.id);
+    if (error) { showToast('DB error: ' + error.message); return; }
+    setState({ logs: state.logs.map(l => l.id===existing.id ? {...l, lunchIn:time} : l) });
+    const lm = lunchDur(existing.lunchOut, time);
+    showToast('✓ Back from lunch at '+ft(time)+(lm?' ('+lm+'m break)':''));
+
+  } else if ((existing.lunchIn || (!existing.lunchOut && !existing.lunchIn)) && existing.in && !existing.out) {
+    // State 4: Check out
+    const { error } = await sb.from('logs').update({ time_out: time }).eq('id', existing.id);
+    if (error) { showToast('DB error: ' + error.message); return; }
+    setState({ logs: state.logs.map(l => l.id===existing.id ? {...l, out:time} : l) });
+    const hrs = ch(existing.in, time, existing.lunchOut, existing.lunchIn);
+    showToast(isOvertime(hrs) ? '⚠ Checked out (overtime) at '+ft(time) : '✓ Checked out at '+ft(time));
+
+  } else { showToast('Already completed for today'); }
+}
+async function adminScan() {
+  const people = state.people.filter(p=>p.role!=='admin');
+  const p = people[state.scanIdx%people.length];
+  setState({scanIdx:state.scanIdx+1});
+  await quickScan(p.id, ''); // admin scan skips photo
+}
+
+// ─── Modal actions ─────────────────────────────────────────────────────────
+function openModal(type, id=null) { setState({modal:type, editId:id!==null?+id:null}); }
+function closeModal() { setState({modal:null, editId:null, editPersonId:null, editTeamId:null, _prefillReq:null}); }
+
+async function saveLogModal() {
+  const pid = +(document.getElementById('m-pid')?.value||0);
+  const date = document.getElementById('m-date')?.value;
+  const inn = document.getElementById('m-in')?.value;
+  const out = document.getElementById('m-out')?.value||'';
+  const lunchOut = document.getElementById('m-lunchout')?.value||'';
+  const lunchIn = document.getElementById('m-lunchin')?.value||'';
+  if (!pid||!date||!inn) { showToast('Fill person, date, and login time'); return; }
+
+  const editId = state.editId !== null ? +state.editId : null;
+
+  if (editId !== null) {
+    const { error } = await sb.from('logs').update({
+      person_id:pid, date, time_in:inn, time_out:out, lunch_out:lunchOut, lunch_in:lunchIn
+    }).eq('id', editId);
+    if (error) { showToast('DB error: ' + error.message); return; }
+    const logs = state.logs.map(l => +l.id===editId ? {...l,personId:pid,date,in:inn,out,lunchOut,lunchIn} : l);
+    setState({logs, modal:null, editId:null}); showToast('Entry updated');
+  } else {
+    const { data, error } = await sb.from('logs').insert({
+      person_id:pid, date, time_in:inn, time_out:out, lunch_out:lunchOut, lunch_in:lunchIn
+    }).select().single();
+    if (error) { showToast('DB error: ' + error.message); return; }
+    setState({logs:[...state.logs, dbLogToApp(data)], modal:null, editId:null}); showToast('Entry added');
+  }
+}
+async function deleteLog() {
+  const editId = +state.editId;
+  const { error } = await sb.from('logs').delete().eq('id', editId);
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({logs: state.logs.filter(l=>+l.id!==editId), modal:null, editId:null}); showToast('Entry deleted');
+}
+
+async function savePersonModal() {
+  const name = document.getElementById('pm-name')?.value.trim();
+  const role = document.getElementById('pm-role')?.value;
+  const dept = document.getElementById('pm-dept')?.value.trim()||'—';
+  const pass = document.getElementById('pm-pass')?.value.trim();
+  const email = document.getElementById('pm-email')?.value.trim();
+  if (!name||!pass||!email) { showToast('Name, email, and password required'); return; }
+  const photo = document.getElementById('pm-photo-data')?.value||'';
+
+  // Check for duplicate email
+  const duplicate = state.people.find(p => p.email && p.email.toLowerCase() === email.toLowerCase());
+  if (duplicate) { showToast('A person with that email already exists'); return; }
+
+  // Store credentials directly in people table (table-based auth, no Supabase Auth needed)
+  const { data, error } = await sb.from('people').insert({
+    name, role, dept, photo, email, pass: hashPw(pass)
+  }).select().single();
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({people:[...state.people, dbPersonToApp(data)], modal:null}); showToast(name+' added');
+}
+
+async function saveEditPersonModal() {
+  const id = state.editPersonId;
+  const name = document.getElementById('epm-name')?.value.trim();
+  const role = document.getElementById('epm-role')?.value;
+  const dept = document.getElementById('epm-dept')?.value.trim()||'—';
+  const photo = document.getElementById('epm-photo-data')?.value;
+  if (!name) { showToast('Name required'); return; }
+
+  const updatePayload = { name, role, dept };
+  if (photo !== undefined && photo !== '') updatePayload.photo = photo;
+
+  const { error } = await sb.from('people').update(updatePayload).eq('id', id);
+  if (error) { showToast('DB error: ' + error.message); return; }
+
+  const people = state.people.map(p => p.id!==id ? p : {...p, name, role, dept, ...(photo?{photo}:{})});
+  let user = state.user;
+  if (user && user.id===id) user = people.find(p=>p.id===id);
+  setState({people, user, modal:null, editPersonId:null}); showToast('Person updated');
+}
+
+async function removePerson(id) {
+  if (!confirm('Remove this person and all their logs?')) return;
+  const { error } = await sb.from('people').delete().eq('id', id);
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({
+    people: state.people.filter(p=>p.id!==id),
+    logs: state.logs.filter(l=>l.personId!==id)
+  }); showToast('Removed');
+}
+
+async function saveLeaveModal() {
+  const type = document.getElementById('lv-type')?.value;
+  const from = document.getElementById('lv-from')?.value;
+  const to = document.getElementById('lv-to')?.value;
+  const reason = document.getElementById('lv-reason')?.value.trim();
+  if (!type||!from||!to) { showToast('Fill all fields'); return; }
+  const { data, error } = await sb.from('leaves').insert({
+    person_id: state.user.id, type, from_date: from, to_date: to,
+    reason, status: 'pending', filed_date: TODAY
+  }).select().single();
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({leaves:[...state.leaves, dbLeaveToApp(data)], modal:null}); showToast('Leave request submitted');
+}
+
+async function approveLeave(id) {
+  const { error } = await sb.from('leaves').update({ status:'approved' }).eq('id', id);
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({leaves: state.leaves.map(l=>l.id===id?{...l,status:'approved'}:l)}); showToast('Leave approved');
+}
+async function rejectLeave(id) {
+  const { error } = await sb.from('leaves').update({ status:'rejected' }).eq('id', id);
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({leaves: state.leaves.map(l=>l.id===id?{...l,status:'rejected'}:l)}); showToast('Leave rejected');
+}
+
+// ─── Schedule actions (NOW DB-backed) ─────────────────────────────────────
+function openSchedModal(date, editId=null) {
+  setState({modal:'sched', editSchedId:editId!==null?+editId:null, schedPickDate:date});
+}
+
+let _schedSelIds = [];
+function toggleSchedChip(id) {
+  if (!document.getElementById('chip-all')) return;
+  const allChip = document.getElementById('chip-all');
+  const personChips = document.querySelectorAll('.chip-person');
+  let current = [];
+  if (allChip.classList.contains('selected')) current = ['all'];
+  else personChips.forEach(c => { if(c.classList.contains('selected')) { const cid = parseInt(c.id.replace('chip-','')); if(!isNaN(cid)) current.push(cid); } });
+  if (id === 'all') { const wasAll = current.includes('all'); current = wasAll ? [] : ['all']; }
+  else { current = current.filter(x => x !== 'all'); if (current.includes(id)) current = current.filter(x => x !== id); else current.push(id); }
+  allChip.classList.toggle('selected', current.includes('all'));
+  personChips.forEach(c => { const cid = parseInt(c.id.replace('chip-','')); c.classList.toggle('selected', current.includes(cid)); });
+  const hint = document.getElementById('sc-assignee-hint');
+  if (hint) { if (current.length === 0) hint.textContent = 'No one selected yet'; else if (current.includes('all')) hint.textContent = 'Assigned to all staff'; else hint.textContent = current.length + ' person(s) selected'; }
+  _schedSelIds = current;
+}
+
+function getSchedSelIds() {
+  const allChip = document.getElementById('chip-all');
+  const personChips = document.querySelectorAll('.chip-person');
+  if (!allChip) return [];
+  if (allChip.classList.contains('selected')) return ['all'];
+  const ids = [];
+  personChips.forEach(c => { if(c.classList.contains('selected')) { const cid = parseInt(c.id.replace('chip-','')); if(!isNaN(cid)) ids.push(cid); }});
+  return ids;
+}
+
+async function saveSchedModal() {
+  const title = document.getElementById('sc-title')?.value.trim();
+  const type = document.getElementById('sc-type')?.value;
+  const date = document.getElementById('sc-date')?.value;
+  const repeat = document.getElementById('sc-repeat')?.value;
+  const startTime = document.getElementById('sc-start')?.value;
+  const endTime = document.getElementById('sc-end')?.value;
+  const note = document.getElementById('sc-note')?.value.trim();
+  const personIds = getSchedSelIds();
+  if (!title || !date) { showToast('Fill title and date'); return; }
+  if (personIds.length === 0) { showToast('Select at least one person'); return; }
+
+  const payload = { title, type, person_ids: JSON.stringify(personIds), date, repeat: repeat||'none', start_time: startTime||'', end_time: endTime||'', note: note||'' };
+
+  if (state.editSchedId !== null) {
+    const { error } = await sb.from('schedules').update(payload).eq('id', state.editSchedId);
+    if (error) { showToast('DB error: ' + error.message); return; }
+    const schedules = state.schedules.map(s => s.id===state.editSchedId ? {...s, title, type, personIds, date, repeat: repeat||'none', startTime: startTime||'', endTime: endTime||'', note: note||''} : s);
+    setState({schedules, modal: null, editSchedId: null}); showToast('Schedule updated');
+  } else {
+    const { data, error } = await sb.from('schedules').insert(payload).select().single();
+    if (error) { showToast('DB error: ' + error.message); return; }
+    setState({schedules:[...state.schedules, dbSchedToApp(data)], modal: null, editSchedId: null}); showToast('Schedule entry added');
+  }
+}
+
+async function deleteSched() {
+  const { error } = await sb.from('schedules').delete().eq('id', state.editSchedId);
+  if (error) { showToast('DB error: ' + error.message); return; }
+  const schedules = state.schedules.filter(s => s.id !== state.editSchedId);
+  setState({schedules, modal: null, editSchedId: null}); showToast('Entry deleted');
+}
+
+function schedForDate(ds, personId) {
+  return state.schedules.filter(s => {
+    const ids = s.personIds || [];
+    const matchPerson = ids.includes('all') || (personId === null) || ids.includes(personId);
+    if (!matchPerson) return false;
+    if (s.repeat === 'none' || !s.repeat) return s.date === ds;
+    const base = new Date(s.date); const target = new Date(ds);
+    if (target < base) return false;
+    if (s.repeat === 'weekly') return base.getDay() === target.getDay();
+    if (s.repeat === 'daily') { const d = target.getDay(); return d >= 1 && d <= 5; }
+    return false;
+  });
+}
+
+// ─── Schedule Requests (employee sends preferred schedule to admin) ─────────
+async function saveScheduleRequest() {
+  const preferredDays = document.getElementById('sr-days')?.value.trim();
+  const preferredStart = document.getElementById('sr-start')?.value;
+  const preferredEnd = document.getElementById('sr-end')?.value;
+  const note = document.getElementById('sr-note')?.value.trim();
+  if (!preferredDays) { showToast('Please fill in your preferred days'); return; }
+  const { data, error } = await sb.from('schedule_requests').insert({
+    person_id: state.user.id, preferred_days: preferredDays,
+    preferred_start: preferredStart||'', preferred_end: preferredEnd||'',
+    note: note||'', status: 'pending'
+  }).select().single();
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({scheduleRequests:[data,...state.scheduleRequests].map(dbSchedReqToApp), modal:null});
+  showToast('Schedule preference sent to admin!');
+}
+
+async function approveSchedReq(id) {
+  const { error } = await sb.from('schedule_requests').update({status:'reviewed'}).eq('id',id);
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({scheduleRequests: state.scheduleRequests.map(r=>r.id===id?{...r,status:'reviewed'}:r)});
+  showToast('Marked as reviewed');
+}
+
+async function dismissSchedReq(id) {
+  const { error } = await sb.from('schedule_requests').delete().eq('id', id);
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({scheduleRequests: state.scheduleRequests.filter(r=>r.id!==id)});
+  showToast('Request dismissed');
+}
+
+// ─── Shift settings (NOW DB-backed) ───────────────────────────────────────
+async function saveShifts() {
+  const startTime = document.getElementById('sh-start')?.value;
+  const endTime = document.getElementById('sh-end')?.value;
+  const maxHours = +document.getElementById('sh-max')?.value||9;
+  if (!startTime||!endTime) { showToast('Fill all fields'); return; }
+  // Upsert — assumes a single row in shifts table (use id=1 or update first row)
+  const { data: existing } = await sb.from('shifts').select('id').limit(1).single();
+  if (existing) {
+    await sb.from('shifts').update({ start_time: startTime, end_time: endTime, max_hours: maxHours }).eq('id', existing.id);
+  } else {
+    await sb.from('shifts').insert({ start_time: startTime, end_time: endTime, max_hours: maxHours });
+  }
+  setState({shifts:{startTime,endTime,maxHours}, modal:null}); showToast('Shift settings saved');
+}
+
+// ─── Teams (admin) ─────────────────────────────────────────────────────────
+async function saveTeamModal() {
+  const name = document.getElementById('tm-name')?.value.trim();
+  const color = document.getElementById('tm-color')?.value||'#2563eb';
+  const memberChips = document.querySelectorAll('.chip-person.selected');
+  const memberIds = [];
+  memberChips.forEach(c=>{ const cid=parseInt(c.id.replace('chip-','')); if(!isNaN(cid)) memberIds.push(cid); });
+  if (!name) { showToast('Team name required'); return; }
+  const payload = { name, color, member_ids: JSON.stringify(memberIds) };
+  if (state.editTeamId) {
+    const { error } = await sb.from('teams').update(payload).eq('id', state.editTeamId);
+    if (error) { showToast('DB error: ' + error.message); return; }
+    setState({teams: state.teams.map(t=>t.id===state.editTeamId?{...t,name,color,memberIds}:t), modal:null, editTeamId:null});
+    showToast('Team updated');
+  } else {
+    const { data, error } = await sb.from('teams').insert(payload).select().single();
+    if (error) { showToast('DB error: ' + error.message); return; }
+    setState({teams:[...state.teams, dbTeamToApp(data)], modal:null}); showToast('Team created');
+  }
+}
+
+async function deleteTeam(id) {
+  if (!confirm('Delete this team?')) return;
+  const { error } = await sb.from('teams').delete().eq('id', id);
+  if (error) { showToast('DB error: ' + error.message); return; }
+  setState({teams: state.teams.filter(t=>t.id!==id), modal:null, editTeamId:null}); showToast('Team deleted');
+}
+
+async function changePassword() {
+  const cur = document.getElementById('cp-cur')?.value.trim();
+  const nw = document.getElementById('cp-new')?.value.trim();
+  const cf = document.getElementById('cp-confirm')?.value.trim();
+  if (!cur||!nw||!cf) { showToast('Fill all fields'); return; }
+  if (nw!==cf) { showToast('New passwords do not match'); return; }
+  if (nw.length<6) { showToast('Password too short (min 6 chars)'); return; }
+
+  // Verify current password against people table
+  const { data: person, error: verifyErr } = await sb
+    .from('people')
+    .select('id')
+    .eq('id', state.user.id)
+    .eq('pass', hashPw(cur))
+    .single();
+  if (verifyErr || !person) { showToast('Current password is incorrect'); return; }
+
+  const { error } = await sb.from('people').update({ pass: hashPw(nw) }).eq('id', state.user.id);
+  if (error) { showToast('Error: ' + error.message); return; }
+  setState({modal:null}); showToast('Password changed');
+}
+
+// ─── Export ────────────────────────────────────────────────────────────────
+function exportCSV(rows, fname) {
+  if (!rows.length) { showToast('Nothing to export'); return; }
+  const cols = Object.keys(rows[0]);
+  const csv = [cols.join(','),...rows.map(r=>cols.map(c=>JSON.stringify(r[c]??'')).join(','))].join('\n');
+  const a = document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download=fname; a.click();
+  showToast('CSV downloaded');
+}
+function exportXLSX(rows, sheet, fname) {
+  if (typeof XLSX==='undefined') { showToast('Library loading, retry'); return; }
+  if (!rows.length) { showToast('Nothing to export'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,sheet);
+  XLSX.writeFile(wb,fname); showToast('Excel downloaded');
+}
+function logRows(logs) {
+  return logs.map(l=>{ const p=personOf(l.personId); const hrs=ch(l.in,l.out,l.lunchOut,l.lunchIn); const lm=lunchDur(l.lunchOut,l.lunchIn); return {Name:p.name,Role:p.role,Department:p.dept,Date:l.date,Login:l.in||'','Lunch Out':l.lunchOut||'','Lunch Back':l.lunchIn||'','Lunch (min)':lm||'',Logout:l.out||'','Net Hours':hrs!==null?+hrs.toFixed(2):'',Late:isLate(l.in,l.personId,l.date)?'Yes':'No',Overtime:isOvertime(hrs)?'Yes':'No'}; });
+}
+function summaryRows() {
+  const ff=state.sfFrom, ft2=state.sfTo;
+  const fl = state.logs.filter(l=>(!ff||l.date>=ff)&&(!ft2||l.date<=ft2));
+  return state.people.filter(p=>p.role!=='admin').map(p=>{
+    const pl = fl.filter(l=>l.personId===p.id);
+    const tot = pl.reduce((s,l)=>{const h=ch(l.in,l.out,l.lunchOut,l.lunchIn);return s+(h||0);},0);
+    const days = pl.filter(l=>ch(l.in,l.out,l.lunchOut,l.lunchIn)!==null).length;
+    const late = pl.filter(l=>isLate(l.in,p.id,l.date)).length;
+    const ot = pl.filter(l=>isOvertime(ch(l.in,l.out,l.lunchOut,l.lunchIn))).length;
+    return {Name:p.name,Role:p.role,Department:p.dept,'Days worked':days,'Total hours':+tot.toFixed(2),'Avg hrs/day':days>0?+(tot/days).toFixed(2):0,'Late arrivals':late,'Overtime days':ot};
+  }).sort((a,b)=>b['Total hours']-a['Total hours']);
+}
+
+// ─── Photo upload helper ───────────────────────────────────────────────────
+function handlePhotoUpload(inputEl, previewId, dataId) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = e.target.result;
+    const prev = document.getElementById(previewId);
+    if (prev) prev.src = data;
+    const dataInput = document.getElementById(dataId);
+    if (dataInput) dataInput.value = data;
+    // show preview
+    const wrap = inputEl.closest('.photo-upload');
+    if (wrap) wrap.querySelector('.photo-upload-overlay').style.opacity=0;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── Password strength ─────────────────────────────────────────────────────
+function pwStrength(pw) {
+  let s=0;
+  if(pw.length>=6)s++;
+  if(pw.length>=10)s++;
+  if(/[A-Z]/.test(pw))s++;
+  if(/[0-9]/.test(pw))s++;
+  if(/[^A-Za-z0-9]/.test(pw))s++;
+  return s;
+}
+function renderPwStrength(id) {
+  const val = document.getElementById(id)?.value||'';
+  const s = pwStrength(val);
+  const colors = ['','#ef4444','#f97316','#eab308','#22c55e','#16a34a'];
+  const labels = ['','Very weak','Weak','Fair','Strong','Very strong'];
+  const pct = Math.round((s/5)*100);
+  return `<div class="pw-strength"><div class="pw-strength-bar" style="width:${pct}%;background:${colors[s]||'transparent'};"></div></div><div style="font-size:10px;color:${colors[s]||'var(--text-muted)'};margin-top:2px;">${labels[s]||''}</div>`;
+}
+
+// ─── Filtered logs helper ──────────────────────────────────────────────────
+function getFilteredLogs() {
+  return state.logs.filter(l=>{
+    const p = personOf(l.personId);
+    if(state.filterPerson&&l.personId!==+state.filterPerson) return false;
+    if(state.filterRole&&p.role!==state.filterRole) return false;
+    if(state.filterFrom&&l.date<state.filterFrom) return false;
+    if(state.filterTo&&l.date>state.filterTo) return false;
+    return true;
+  }).sort((a,b)=>b.date.localeCompare(a.date)||b.in.localeCompare(a.in));
+}
+
+// ─── Avatar HTML ───────────────────────────────────────────────────────────
+function avatarHTML(person, size='av-sm') {
+  if (person.photo) return `<div class="avatar ${size}" style="background:${avColor(person.role)};"><img src="${person.photo}" alt="${esc(person.name)}"></div>`;
+  return `<div class="avatar ${size}" style="background:${avColor(person.role)};">${gi(person.name)}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════
+
+function renderLogin() {
+  const err = state._error;
+  const loading = state._loading;
+  return `<div class="login-wrap">
+    <div class="login-box">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="width:44px;height:44px;background:var(--blue);border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" fill="white"/></svg>
+        </div>
+        <div style="font-size:20px;font-weight:600;color:var(--text);letter-spacing:-.02em;">Attendance System</div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Sign in to your portal</div>
+      </div>
+      ${err?`<div style="background:var(--red-light);border:1px solid var(--red-mid);color:var(--red);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;margin-bottom:12px;">${esc(err)}</div>`:''}
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input id="li-email" class="form-input" type="email" placeholder="you@company.com" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input id="li-pass" type="password" class="form-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="btn btn-primary btn-lg btn-full" onclick="doLogin()" ${loading?'disabled':''}>
+        ${loading?'Signing in…':'Sign in'}
+      </button>
+    </div>
+  </div>`;
+}
+
+function renderTopbar() {
+  const u = state.user;
+  const notifs = getNotifications();
+  return `<div class="topbar">
+    <div class="topbar-brand">
+      <div class="brand-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="white"/></svg>
+      </div>
+      <span class="brand-name">Attendance</span>
+    </div>
+    <div class="topbar-right">
+      ${u.role==='admin'?`<div style="position:relative;">
+        <button class="notif-btn" onclick="setState({notifOpen:!state.notifOpen})" title="Notifications">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor" opacity=".7"/></svg>
+          ${notifs.length?'<div class="notif-dot"></div>':''}
+        </button>
+        ${state.notifOpen?renderNotifPanel(notifs):''}
+      </div>`:''}
+      ${avatarHTML(u,'av-sm')}
+      <div class="user-info">
+        <div class="name">${esc(u.name)}</div>
+        <div class="sub">${u.role} · ${esc(u.dept)}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="doLogout()">Logout</button>
+    </div>
+  </div>`;
+}
+
+function renderNotifPanel(notifs) {
+  return `<div class="notif-panel">
+    <div class="notif-header">Notifications ${notifs.length?`<span class="badge badge-admin" style="margin-left:6px;">${notifs.length}</span>`:''}</div>
+    ${notifs.length===0?'<div class="notif-empty">All clear! No alerts right now.</div>':''}
+    ${notifs.map(n=>{
+      if(n.type==='schedreqs') return `<div class="notif-item"><div class="notif-item-title">📅 Schedule preference requests</div><div class="notif-item-sub">${n.count} staff member${n.count>1?'s':''} sent preferred schedule requests.</div></div>`;
+      if(n.type==='forgot_out') return `<div class="notif-item"><div class="notif-item-title">⚠️ Forgot to check out</div><div class="notif-item-sub">${esc(n.name)} checked in at ${n.time} but hasn't logged out yet.</div></div>`;
+      if(n.type==='leaves') return `<div class="notif-item"><div class="notif-item-title">📋 Pending leave requests</div><div class="notif-item-sub">${n.count} leave request${n.count>1?'s':''} need your approval.</div></div>`;
+      if(n.type==='late') return `<div class="notif-item"><div class="notif-item-title">🕐 Late arrivals today</div><div class="notif-item-sub">${n.names.slice(0,3).map(esc).join(', ')}${n.count>3?` and ${n.count-3} more`:''} arrived late.</div></div>`;
+      return '';
+    }).join('')}
+  </div>`;
+}
+
+const adminNav = [
+  {id:'dashboard',label:'Dashboard',icon:'<path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" fill="currentColor"/>'},
+  {id:'scan',label:'QR Scanner',icon:'<path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h1.5v1.5H13V13zm1.5 1.5H16V16h-1.5v-1.5zM16 13h1.5v1.5H16V13zm-3 3h1.5v1.5H13V16zm1.5 1.5H16V19h-1.5v-1.5zM16 16h1.5v1.5H16V16zm1.5-1.5H19V16h-1.5v-1.5zm0 3H19V19h-1.5v-1.5zM22 7h-2V4h-3V2h5v5zm0 15v-5h-2v3h-3v2h5zM2 22h5v-2H4v-3H2v5zM2 2v5h2V4h3V2H2z" fill="currentColor"/>'},
+  {id:'logs',label:'Time Logs',icon:'<path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" fill="currentColor"/>'},
+  {id:'summary',label:'Summary',icon:'<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" fill="currentColor"/>'},
+  {id:'people',label:'People',icon:'<path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/>'},
+  {id:'leaves',label:'Leave Requests',icon:'<path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z" fill="currentColor"/>'},
+  {id:'schedrequests',label:'Sched Requests',icon:'<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" fill="currentColor"/>'},
+  {id:'deptreport',label:'Dept Report',icon:'<path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z" fill="currentColor"/>'},
+  {id:'schedule',label:'Work Schedule',icon:'<path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5zm2 4h10v2H7zm0 4h7v2H7z" fill="currentColor"/>'},
+  {id:'teams',label:'Teams',icon:'<path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/>'},
+  {id:'shifts',label:'Shift Settings',icon:'<path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z" fill="currentColor"/>'},
+];
+const memberNav = [
+  {id:'dashboard',label:'My Dashboard',icon:'<path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" fill="currentColor"/>'},
+  {id:'scan',label:'Check In',icon:'<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" fill="currentColor"/>'},
+  {id:'history',label:'My History',icon:'<path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z" fill="currentColor"/>'},
+  {id:'calendar',label:'My Calendar',icon:'<path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z" fill="currentColor"/>'},
+  {id:'schedule',label:'My Schedule',icon:'<path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5zm2 4h10v2H7zm0 4h7v2H7z" fill="currentColor"/>'},
+  {id:'schedrequest',label:'Request Schedule',icon:'<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" fill="currentColor"/>'},
+  {id:'leaves',label:'My Leaves',icon:'<path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1z" fill="currentColor"/>'},
+  {id:'profile',label:'My Profile',icon:'<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="currentColor"/>'},
+];
+
+function renderMobileNav(nav) {
+  // Show first 4 nav items + "More" button
+  const primary = nav.slice(0, 4);
+  const overflow = nav.slice(4);
+  return `
+  <div class="mobile-more-overlay ${state.moreOpen?'open':''}" onclick="setState({moreOpen:false})"></div>
+  <div class="mobile-more-panel ${state.moreOpen?'open':''}">
+    <div class="mobile-more-handle"></div>
+    ${overflow.map(n=>`<div class="mobile-more-item ${state.navPage===n.id?'active':''}" onclick="setState({navPage:'${n.id}',notifOpen:false,moreOpen:false})">
+      <svg viewBox="0 0 24 24" fill="none">${n.icon}</svg>
+      ${n.label}
+    </div>`).join('')}
+    <div class="mobile-more-item" onclick="doLogout()" style="color:var(--red);">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" fill="currentColor"/></svg>
+      Logout
+    </div>
+  </div>
+  <nav class="mobile-nav">
+    <div class="mobile-nav-inner">
+      ${primary.map(n=>`<div class="mobile-nav-item ${state.navPage===n.id?'active':''}" onclick="setState({navPage:'${n.id}',notifOpen:false,moreOpen:false})">
+        <svg viewBox="0 0 24 24" fill="none">${n.icon}</svg>
+        <span>${n.label.split(' ')[0]}</span>
+      </div>`).join('')}
+      ${overflow.length?`<div class="mobile-nav-item ${overflow.some(n=>n.id===state.navPage)?'active':''}" onclick="setState({moreOpen:!state.moreOpen})">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="currentColor"/></svg>
+        <span>More</span>
+      </div>`:''}
+    </div>
+  </nav>`;
+}
+
+function renderSidenav(items) {
+  return items.map(n=>`<div class="nav-item ${state.navPage===n.id?'active':''}" onclick="setState({navPage:'${n.id}',notifOpen:false})">
+    <svg class="nav-icon" viewBox="0 0 24 24" fill="none">${n.icon}</svg>
+    ${n.label}
+  </div>`).join('');
+}
+
+// ─── Modal render ──────────────────────────────────────────────────────────
+function renderModal() {
+  if (!state.modal) return '';
+  const isEdit = state.editId !== null;
+
+  if (state.modal==='log') {
+    const log = isEdit ? state.logs.find(l=>l.id===state.editId) : null;
+    const personOpts = state.people.filter(p=>p.role!=='admin').map(p=>`<option value="${p.id}" ${log&&log.personId===p.id?'selected':''}>${esc(p.name)} (${p.role})</option>`).join('');
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-header"><div class="modal-title">${isEdit?'Edit entry':'Add entry'}</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div class="form-group"><label class="form-label">Person</label><select id="m-pid" class="form-input"><option value="">Select person…</option>${personOpts}</select></div>
+      <div class="form-group"><label class="form-label">Date</label><input type="date" id="m-date" class="form-input" value="${log?.date||TODAY}"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Login time</label><input type="time" id="m-in" class="form-input" value="${log?.in||''}"></div>
+        <div class="form-group"><label class="form-label">Logout time</label><input type="time" id="m-out" class="form-input" value="${log?.out||''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">🍽 Lunch out</label><input type="time" id="m-lunchout" class="form-input" value="${log?.lunchOut||''}"></div>
+        <div class="form-group"><label class="form-label">🍽 Lunch back</label><input type="time" id="m-lunchin" class="form-input" value="${log?.lunchIn||''}"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" style="flex:1" onclick="saveLogModal()">Save</button>
+        ${isEdit?`<button class="btn btn-danger" onclick="deleteLog()">Delete</button>`:''}
+      </div>
+    </div></div>`;
+  }
+
+  if (state.modal==='person') {
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-header"><div class="modal-title">Add person</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <label class="photo-upload" onclick="document.getElementById('pm-photo-input').click()">
+          <img id="pm-photo-preview" src="" style="display:none;width:80px;height:80px;border-radius:50%;object-fit:cover;">
+          <div id="pm-photo-placeholder" style="text-align:center;font-size:11px;color:var(--text-muted);">📷<br>Photo</div>
+          <div class="photo-upload-overlay"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="white"/></svg></div>
+          <input type="file" id="pm-photo-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(this,'pm-photo-preview','pm-photo-data');document.getElementById('pm-photo-preview').style.display='block';document.getElementById('pm-photo-placeholder').style.display='none';">
+          <input type="hidden" id="pm-photo-data">
+        </label>
+        <div style="flex:1">
+          <div class="form-group"><label class="form-label">Full name</label><input id="pm-name" class="form-input" placeholder="Full name"></div>
+          <div class="form-group"><label class="form-label">Role</label><select id="pm-role" class="form-input"><option value="employee">Employee</option><option value="intern">Intern</option></select></div>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Department</label><input id="pm-dept" class="form-input" placeholder="e.g. Engineering"></div>
+      <div class="form-group"><label class="form-label">Email (for login)</label><input id="pm-email" class="form-input" type="email" placeholder="employee@company.com"></div>
+      <div class="form-group"><label class="form-label">Password</label><input id="pm-pass" class="form-input" placeholder="Set initial password" oninput="document.getElementById('pm-pwstr').innerHTML=renderPwStrength('pm-pass')"><div id="pm-pwstr"></div></div>
+      <button class="btn btn-primary btn-full" onclick="savePersonModal()">Add person</button>
+    </div></div>`;
+  }
+
+  if (state.modal==='editperson') {
+    const p = state.people.find(x=>x.id===state.editPersonId);
+    if (!p) return '';
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-header"><div class="modal-title">Edit person</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <label class="photo-upload" onclick="document.getElementById('epm-photo-input').click()">
+          ${p.photo?`<img id="epm-photo-preview" src="${p.photo}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;">`:`<img id="epm-photo-preview" src="" style="display:none;width:80px;height:80px;border-radius:50%;object-fit:cover;"><div id="epm-photo-placeholder" style="text-align:center;font-size:11px;color:var(--text-muted);">📷<br>Photo</div>`}
+          <div class="photo-upload-overlay"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="white"/></svg></div>
+          <input type="file" id="epm-photo-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(this,'epm-photo-preview','epm-photo-data');document.getElementById('epm-photo-preview').style.display='block';if(document.getElementById('epm-photo-placeholder'))document.getElementById('epm-photo-placeholder').style.display='none';">
+          <input type="hidden" id="epm-photo-data" value="${p.photo||''}">
+        </label>
+        <div style="flex:1">
+          <div class="form-group"><label class="form-label">Full name</label><input id="epm-name" class="form-input" value="${esc(p.name)}"></div>
+          <div class="form-group"><label class="form-label">Role</label><select id="epm-role" class="form-input"><option value="employee" ${p.role==='employee'?'selected':''}>Employee</option><option value="intern" ${p.role==='intern'?'selected':''}>Intern</option></select></div>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Department</label><input id="epm-dept" class="form-input" value="${esc(p.dept)}"></div>
+      <div class="form-group"><label class="form-label">New password <span style="font-weight:400;color:var(--text-muted)">(leave blank to keep current)</span></label><input id="epm-pass" class="form-input" placeholder="New password (optional)" oninput="document.getElementById('epm-pwstr').innerHTML=renderPwStrength('epm-pass')"><div id="epm-pwstr"></div></div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" style="flex:1" onclick="saveEditPersonModal()">Save changes</button>
+        <button class="btn btn-danger" onclick="closeModal()">Cancel</button>
+      </div>
+    </div></div>`;
+  }
+
+  if (state.modal==='leave') {
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-header"><div class="modal-title">Request leave</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div class="form-group"><label class="form-label">Leave type</label>
+        <select id="lv-type" class="form-input"><option value="">Select…</option><option>Sick leave</option><option>Vacation leave</option><option>Emergency leave</option><option>Personal leave</option></select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">From</label><input type="date" id="lv-from" class="form-input" value="${TODAY}"></div>
+        <div class="form-group"><label class="form-label">To</label><input type="date" id="lv-to" class="form-input" value="${TODAY}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Reason (optional)</label><textarea id="lv-reason" class="form-input" rows="3" placeholder="Brief reason for leave…" style="resize:vertical;"></textarea></div>
+      <button class="btn btn-primary btn-full" onclick="saveLeaveModal()">Submit request</button>
+    </div></div>`;
+  }
+
+  if (state.modal==='shifts') {
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-header"><div class="modal-title">Shift settings</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">These settings are used to flag late arrivals and overtime across all employees.</div>
+      <div class="form-group"><label class="form-label">Shift start time</label><input type="time" id="sh-start" class="form-input" value="${state.shifts.startTime}"></div>
+      <div class="form-group"><label class="form-label">Shift end time</label><input type="time" id="sh-end" class="form-input" value="${state.shifts.endTime}"></div>
+      <div class="form-group"><label class="form-label">Max hours before overtime</label><input type="number" id="sh-max" class="form-input" value="${state.shifts.maxHours}" min="1" max="24" step="0.5"></div>
+      <button class="btn btn-primary btn-full" onclick="saveShifts()">Save settings</button>
+    </div></div>`;
+  }
+
+  if (state.modal==='sched') {
+    const isEditSched = state.editSchedId !== null;
+    const se = isEditSched ? state.schedules.find(s=>s.id===state.editSchedId) : null;
+    const req = state._prefillReq;
+    const nonAdmin = state.people.filter(p=>p.role!=='admin');
+    let selIds = [];
+    if (se) {
+      if (se.personIds) selIds = se.personIds;
+    } else if (req) {
+      selIds = [req.personId];
+    }
+    const chips = nonAdmin.map(p=>
+      `<div class="chip chip-person ${selIds.includes(p.id)?'selected':''}" id="chip-${p.id}" onclick="toggleSchedChip(${p.id})" title="${esc(p.dept)}">${esc(p.name.split(' ')[0])} <span style="opacity:.6;font-size:10px;">${p.role==='intern'?'(I)':'(E)'}</span></div>`
+    ).join('');
+    const hint = selIds.length===0?'No one selected yet':selIds.includes('all')?'Assigned to all staff':`${selIds.length} person(s) selected`;
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:500px;">
+      <div class="modal-header"><div class="modal-title">${isEditSched?'Edit schedule entry':'Add schedule entry'}</div><button class="btn btn-sm" onclick="closeModal()">&#x2715;</button></div>
+      ${req?`<div style="background:var(--blue-light);border:1px solid var(--blue-mid);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--blue);margin-bottom:14px;">📋 From schedule request by <strong>${esc(personOf(req.personId).name)}</strong> — preferred days: ${esc(req.preferredDays)}${req.note?' · '+esc(req.note):''}</div>`:''}
+      <div class="form-group"><label class="form-label">Title</label><input id="sc-title" class="form-input" placeholder="e.g. Morning shift, Team meeting" value="${se?esc(se.title):req?'Shift for '+esc(personOf(req.personId).name):''}"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select id="sc-type" class="form-input">
+          <option value="shift" ${!se||se.type==='shift'?'selected':''}>Shift</option>
+          <option value="meeting" ${se&&se.type==='meeting'?'selected':''}>Meeting</option>
+          <option value="event" ${se&&se.type==='event'?'selected':''}>Event</option>
+          <option value="offday" ${se&&se.type==='offday'?'selected':''}>Day off / Holiday</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assigned to <span style="font-weight:400;color:var(--text-muted);">click to select multiple</span></label>
+        <div style="margin-bottom:6px;">
+          <div class="chip chip-all ${selIds.includes('all')?'selected':''}" id="chip-all" onclick="toggleSchedChip('all')" style="display:inline-flex;">All staff</div>
+        </div>
+        <div class="chip-picker" id="chip-picker-wrap" style="cursor:default;">${chips}</div>
+        <div id="sc-assignee-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px;">${hint}</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Date</label><input type="date" id="sc-date" class="form-input" value="${se?se.date:state.schedPickDate||TODAY}"></div>
+        <div class="form-group"><label class="form-label">Repeat</label>
+          <select id="sc-repeat" class="form-input">
+            <option value="none" ${!se||se.repeat==='none'?'selected':''}>No repeat</option>
+            <option value="weekly" ${se&&se.repeat==='weekly'?'selected':''}>Weekly</option>
+            <option value="daily" ${se&&se.repeat==='daily'?'selected':''}>Daily (Mon-Fri)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Start time</label><input type="time" id="sc-start" class="form-input" value="${se?se.startTime:req?.preferredStart||state.shifts.startTime}"></div>
+        <div class="form-group"><label class="form-label">End time</label><input type="time" id="sc-end" class="form-input" value="${se?se.endTime:req?.preferredEnd||state.shifts.endTime}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Note (optional)</label><input id="sc-note" class="form-input" placeholder="Brief note" value="${se?esc(se.note||''):req?esc(req.note||''):''}"></div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" style="flex:1" onclick="saveSchedModal()">Save</button>
+        ${isEditSched?`<button class="btn btn-danger" onclick="deleteSched()">Delete</button>`:''}
+        <button class="btn" onclick="closeModal()">Cancel</button>
+      </div>
+    </div></div>`;
+  }
+
+  if (state.modal==='checkin_photo') {
+    return `<div class="modal-overlay"><div class="modal" style="max-width:360px;">
+      <div class="modal-header"><div class="modal-title">📸 Check-In Photo</div></div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">Take or upload a photo as proof of attendance. This will be saved with your log.</div>
+      <div id="ci-camera-wrap" style="margin-bottom:12px;">
+        <video id="ci-video" style="width:100%;border-radius:var(--radius);background:#000;display:none;" autoplay playsinline></video>
+        <canvas id="ci-canvas" style="display:none;"></canvas>
+        <img id="ci-preview" style="width:100%;border-radius:var(--radius);display:none;" alt="Preview">
+        <div id="ci-placeholder" style="height:160px;background:var(--bg);border-radius:var(--radius);border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-muted);">
+          <span style="font-size:36px;">📷</span>
+          <span style="font-size:12px;">Camera or upload photo</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" style="flex:1" onclick="startCamera()">📷 Open Camera</button>
+        <button class="btn btn-sm" id="ci-capture-btn" style="display:none;" onclick="capturePhoto()">📸 Capture</button>
+        <label class="btn" style="cursor:pointer;">📁 Upload<input type="file" accept="image/*" capture="environment" style="display:none;" onchange="handleCheckinUpload(this)"></label>
+        <button class="btn btn-sm" id="ci-retake-btn" style="display:none;" onclick="retakePhoto()">↺ Retake</button>
+      </div>
+      <input type="hidden" id="ci-photo-data">
+      <div class="modal-footer">
+        <button class="btn btn-success" style="flex:1" onclick="submitCheckinPhoto()" id="ci-submit-btn">✓ Check In</button>
+        <button class="btn" onclick="closeCheckinModal()">Cancel</button>
+      </div>
+    </div></div>`;
+  }
+
+  if (state.modal==='team') {
+    const t = state.editTeamId ? state.teams.find(x=>x.id===state.editTeamId) : null;
+    const nonAdmin = state.people.filter(p=>p.role!=='admin');
+    const selIds = t ? t.memberIds : [];
+    const chips = nonAdmin.map(p=>
+      `<div class="chip chip-person ${selIds.includes(p.id)?'selected':''}" id="chip-${p.id}" onclick="toggleSchedChip(${p.id})" title="${esc(p.dept)}">${esc(p.name.split(' ')[0])} <span style="opacity:.6;font-size:10px;">${p.role==='intern'?'(I)':'(E)'}</span></div>`
+    ).join('');
+    const colors = ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2','#be185d'];
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-header"><div class="modal-title">${t?'Edit team':'Create team'}</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div class="form-group"><label class="form-label">Team name</label><input id="tm-name" class="form-input" placeholder="e.g. Frontend, Design" value="${t?esc(t.name):''}"></div>
+      <div class="form-group"><label class="form-label">Color</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+          ${colors.map(c=>`<div onclick="document.getElementById('tm-color').value='${c}';document.querySelectorAll('.color-swatch').forEach(x=>x.style.outline='none');this.style.outline='3px solid '+this.style.background+';outline-offset:2px'" class="color-swatch" style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;${t&&t.color===c?'outline:3px solid '+c+';outline-offset:2px':''}"></div>`).join('')}
+        </div>
+        <input type="hidden" id="tm-color" value="${t?t.color:colors[0]}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Members <span style="font-weight:400;color:var(--text-muted);">click to select</span></label>
+        <div class="chip-picker" style="cursor:default;">${chips}</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" style="flex:1" onclick="saveTeamModal()">${t?'Save changes':'Create team'}</button>
+        ${t?`<button class="btn btn-danger" onclick="deleteTeam(${t.id})">Delete</button>`:''}
+        <button class="btn" onclick="closeModal()">Cancel</button>
+      </div>
+    </div></div>`;
+  }
+
+  if (state.modal==='schedrequest') {
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-header"><div class="modal-title">📅 Request Preferred Schedule</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">Let your admin know your preferred working days and hours. They'll consider it when building the schedule.</div>
+      <div class="form-group"><label class="form-label">Preferred days / dates</label><input id="sr-days" class="form-input" placeholder="e.g. Mon-Fri, or specific dates like 2025-06-01"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Preferred start</label><input type="time" id="sr-start" class="form-input" value="${state.shifts.startTime}"></div>
+        <div class="form-group"><label class="form-label">Preferred end</label><input type="time" id="sr-end" class="form-input" value="${state.shifts.endTime}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Note / reason (optional)</label><textarea id="sr-note" class="form-input" rows="3" placeholder="Any notes for your admin…" style="resize:vertical;"></textarea></div>
+      <button class="btn btn-primary btn-full" onclick="saveScheduleRequest()">Send to admin</button>
+    </div></div>`;
+  }
+
+
+  if (state.modal==='changepass') {
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-header"><div class="modal-title">Change password</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div class="form-group"><label class="form-label">Current password</label><input type="password" id="cp-cur" class="form-input" placeholder="Current password"></div>
+      <div class="form-group"><label class="form-label">New password</label><input type="password" id="cp-new" class="form-input" placeholder="New password" oninput="document.getElementById('cp-pwstr').innerHTML=renderPwStrength('cp-new')"><div id="cp-pwstr"></div></div>
+      <div class="form-group"><label class="form-label">Confirm new password</label><input type="password" id="cp-confirm" class="form-input" placeholder="Repeat new password"></div>
+      <button class="btn btn-primary btn-full" onclick="changePassword()">Update password</button>
+    </div></div>`;
+  }
+
+  return '';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ADMIN PAGES
+// ═══════════════════════════════════════════════════════════════════
+
+function adminDashboard() {
+  const nonAdmin = state.people.filter(p=>p.role!=='admin');
+  const todayLogs = state.logs.filter(l=>l.date===TODAY);
+  const present = nonAdmin.filter(p=>todayLogs.some(l=>l.personId===p.id&&l.in));
+  const checkedOut = nonAdmin.filter(p=>todayLogs.some(l=>l.personId===p.id&&l.out));
+  const lateToday = nonAdmin.filter(p=>{ const log=todayLog(p.id); return log&&isLate(log.in,p.id,TODAY); });
+  const totalHToday = todayLogs.reduce((s,l)=>{const h=ch(l.in,l.out,l.lunchOut,l.lunchIn);return s+(h||0);},0);
+  const pendingLeaves = state.leaves.filter(l=>l.status==='pending').length;
+
+  return `
+  <div class="stats-grid stats-grid-4">
+    <div class="stat-card"><div class="stat-num">${present.length}<span style="font-size:16px;color:var(--text-secondary);">/${nonAdmin.length}</span></div><div class="stat-lbl">Present today</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--red)">${lateToday.length}</div><div class="stat-lbl">Late arrivals</div></div>
+    <div class="stat-card"><div class="stat-num">${totalHToday.toFixed(1)}h</div><div class="stat-lbl">Total hours today</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:${pendingLeaves>0?'var(--amber)':'var(--text)'}">${pendingLeaves}</div><div class="stat-lbl">Pending leaves</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Today's attendance — ${TODAY}</div></div>
+    <div class="tbl-wrap">
+    <table class="tbl"><thead><tr><th>Name</th><th>Role</th><th>Dept</th><th>Status</th><th>Login</th><th>Logout</th><th>Hours</th><th>Flag</th></tr></thead>
+    <tbody>${nonAdmin.map(p=>{
+      const log = todayLog(p.id);
+      const inn = log?.in||''; const out = log?.out||'';
+      const lunchOut = log?.lunchOut||''; const lunchIn = log?.lunchIn||'';
+      const hrs = ch(inn,out,lunchOut,lunchIn);
+      const onLunch = !!(inn && lunchOut && !lunchIn && !out);
+      const status = inn?(out?'out':onLunch?'lunch':'in'):'absent';
+      const late = isLate(inn,p.id,TODAY);
+      const ot = isOvertime(hrs);
+      return `<tr>
+        <td><div class="tbl-person">${avatarHTML(p,'av-xs')}<span>${esc(p.name)}</span></div></td>
+        <td><span class="badge badge-${p.role}">${p.role}</span></td>
+        <td class="text-secondary">${esc(p.dept)}</td>
+        <td><span class="badge badge-${status}">${status}</span></td>
+        <td class="text-success" style="font-weight:500;">${ft(inn)}</td>
+        <td class="text-danger">${ft(out)}</td>
+        <td>${hrs!==null?`<span class="hpill hpill-done">${fh(hrs)}</span>`:inn?`<span class="hpill hpill-active">Active</span>`:'—'}</td>
+        <td>${late?`<span class="badge badge-late">Late</span>`:''} ${ot?`<span class="badge badge-overtime">OT</span>`:''}</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function adminScanPage() {
+  const nonAdmin = state.people.filter(p=>p.role!=='admin');
+  return `<div class="card" style="text-align:center;">
+    <div class="card-title" style="margin-bottom:8px;">QR Scanner — Admin</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">Simulate scanning an employee or intern QR code</div>
+    <div class="qr-box" id="qr-box" onclick="adminScan();this.classList.add('scanning');setTimeout(()=>this.classList.remove('scanning'),600)">
+      <svg width="56" height="56" viewBox="0 0 80 80" fill="none">
+        <rect x="4" y="4" width="30" height="30" rx="3" stroke="var(--blue)" stroke-width="3"/><rect x="12" y="12" width="14" height="14" rx="1" fill="var(--blue)"/>
+        <rect x="46" y="4" width="30" height="30" rx="3" stroke="var(--blue)" stroke-width="3"/><rect x="54" y="12" width="14" height="14" rx="1" fill="var(--blue)"/>
+        <rect x="4" y="46" width="30" height="30" rx="3" stroke="var(--blue)" stroke-width="3"/><rect x="12" y="54" width="14" height="14" rx="1" fill="var(--blue)"/>
+        <rect x="46" y="46" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="58" y="46" width="6" height="6" rx="1" fill="var(--blue)"/>
+        <rect x="46" y="58" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="58" y="58" width="6" height="6" rx="1" fill="var(--blue)"/>
+        <rect x="70" y="46" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="70" y="58" width="6" height="6" rx="1" fill="var(--blue)"/>
+        <rect x="46" y="70" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="58" y="70" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="70" y="70" width="6" height="6" rx="1" fill="var(--blue)"/>
+      </svg>
+      <div style="font-size:12px;color:var(--blue);">Click to scan</div>
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:16px;">Cycles through: ${nonAdmin.map(p=>esc(p.name)).join(' → ')}</div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Manual entry</div><button class="btn btn-success btn-sm" onclick="openModal('log')">+ Add entry</button></div>
+    <div class="text-sm text-secondary">Use the Time Logs tab for full management, filtering, and bulk export.</div>
+  </div>`;
+}
+
+function adminLogs() {
+  const fl = getFilteredLogs();
+  const personOpts = state.people.filter(p=>p.role!=='admin').map(p=>`<option value="${p.id}" ${state.filterPerson==p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">Time logs</div><div class="card-sub">${fl.length} record${fl.length!==1?'s':''}</div></div>
+      <div class="btn-group">
+        <button class="btn btn-success btn-sm" onclick="openModal('log')">+ Add</button>
+        <button class="btn btn-sm" onclick="exportCSV(logRows(getFilteredLogs()),'logs.csv')">CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="exportXLSX(logRows(getFilteredLogs()),'Logs','logs.xlsx')">Excel</button>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <div class="form-group"><label class="form-label">Person</label><select class="form-input" onchange="setState({filterPerson:this.value})"><option value="">All</option>${personOpts}</select></div>
+      <div class="form-group"><label class="form-label">Role</label><select class="form-input" onchange="setState({filterRole:this.value})"><option value="">All</option><option value="employee" ${state.filterRole==='employee'?'selected':''}>Employee</option><option value="intern" ${state.filterRole==='intern'?'selected':''}>Intern</option></select></div>
+      <div class="form-group"><label class="form-label">From</label><input type="date" class="form-input" value="${state.filterFrom}" onchange="setState({filterFrom:this.value})"></div>
+      <div class="form-group"><label class="form-label">To</label><input type="date" class="form-input" value="${state.filterTo}" onchange="setState({filterTo:this.value})"></div>
+      <button class="btn btn-sm" onclick="setState({filterPerson:'',filterRole:'',filterFrom:'',filterTo:''})">Clear</button>
+    </div>
+    <div class="tbl-wrap">
+    <table class="tbl"><thead><tr><th>Name</th><th>Role</th><th>Date</th><th>Login</th><th>Lunch</th><th>Logout</th><th>Net Hours</th><th>Flags</th><th></th></tr></thead>
+    <tbody>${fl.length?fl.map(l=>{ const p=personOf(l.personId); const hrs=ch(l.in,l.out,l.lunchOut,l.lunchIn); const lm=lunchDur(l.lunchOut,l.lunchIn); const late=isLate(l.in,l.personId,l.date); const ot=isOvertime(hrs); return `<tr>
+      <td><div class="tbl-person">${avatarHTML(p,'av-xs')}<span>${esc(p.name)}</span></div></td>
+      <td><span class="badge badge-${p.role}">${p.role}</span></td>
+      <td class="text-secondary">${l.date}</td>
+      <td class="text-success" style="font-weight:500;">${ft(l.in)}</td>
+      <td style="color:var(--amber);font-size:12px;">${l.lunchOut?(ft(l.lunchOut)+(l.lunchIn?" → "+ft(l.lunchIn)+(lm?" ("+lm+"m)":""):" (out)")):"—"}</td>
+      <td class="text-danger">${l.out?ft(l.out):'<span class="text-muted">—</span>'}</td>
+      <td>${hrs!==null?`<span class="hpill hpill-done">${fh(hrs)}</span>`:l.in?`<span class="hpill hpill-active">Active</span>`:"—"}</td>
+      <td>${late?`<span class="badge badge-late">Late</span> `:''} ${ot?`<span class="badge badge-overtime">OT</span>`:''}</td>
+      <td><button class="btn btn-warning btn-sm" onclick="openModal('log',${l.id})">Edit</button></td>
+    </tr>`; }).join(''):`<tr><td colspan="9" class="empty-state">No records match the filter.</td></tr>`}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function adminSummary() {
+  const ff=state.sfFrom, ft2=state.sfTo;
+  const fl = state.logs.filter(l=>(!ff||l.date>=ff)&&(!ft2||l.date<=ft2));
+  const nonAdmin = state.people.filter(p=>p.role!=='admin');
+  const totH = fl.reduce((s,l)=>{const h=ch(l.in,l.out,l.lunchOut,l.lunchIn);return s+(h||0);},0);
+  const rows = summaryRows();
+  return `
+  <div class="stats-grid stats-grid-3">
+    <div class="stat-card"><div class="stat-num">${nonAdmin.filter(p=>p.role==='employee').length}</div><div class="stat-lbl">Employees</div></div>
+    <div class="stat-card"><div class="stat-num">${nonAdmin.filter(p=>p.role==='intern').length}</div><div class="stat-lbl">Interns</div></div>
+    <div class="stat-card"><div class="stat-num">${totH.toFixed(1)}h</div><div class="stat-lbl">Total hours</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Hours per person</div>
+      <div class="btn-group">
+        <button class="btn btn-sm" onclick="exportCSV(summaryRows(),'summary.csv')">CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="exportXLSX(summaryRows(),'Summary','summary.xlsx')">Excel</button>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <div class="form-group"><label class="form-label">From</label><input type="date" class="form-input" value="${state.sfFrom}" onchange="setState({sfFrom:this.value})"></div>
+      <div class="form-group"><label class="form-label">To</label><input type="date" class="form-input" value="${state.sfTo}" onchange="setState({sfTo:this.value})"></div>
+      <button class="btn btn-sm" onclick="setState({sfFrom:'',sfTo:''})">Clear</button>
+    </div>
+    <div class="tbl-wrap">
+    <table class="tbl"><thead><tr><th>Name</th><th>Role</th><th>Dept</th><th>Days</th><th>Total hrs</th><th>Avg/day</th><th>Late days</th><th>OT days</th></tr></thead>
+    <tbody>${rows.length?rows.map(r=>`<tr>
+      <td><div class="tbl-person"><div class="avatar av-xs" style="background:${avColor(r.Role)};">${gi(r.Name)}</div><span>${esc(r.Name)}</span></div></td>
+      <td><span class="badge badge-${r.Role}">${r.Role}</span></td>
+      <td class="text-secondary">${esc(r.Department)}</td>
+      <td class="text-secondary">${r['Days worked']}</td>
+      <td><span class="hpill ${r['Total hours']>0?'hpill-done':'hpill-active'}">${r['Total hours'].toFixed(2)}h</span></td>
+      <td class="text-secondary">${r['Avg hrs/day']>0?r['Avg hrs/day'].toFixed(2)+'h':'—'}</td>
+      <td>${r['Late arrivals']>0?`<span class="badge badge-late">${r['Late arrivals']}</span>`:'<span class="text-muted">0</span>'}</td>
+      <td>${r['Overtime days']>0?`<span class="badge badge-overtime">${r['Overtime days']}</span>`:'<span class="text-muted">0</span>'}</td>
+    </tr>`).join(''):`<tr><td colspan="8" class="empty-state">No data.</td></tr>`}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function adminPeople() {
+  const nonAdmin = state.people.filter(p=>p.role!=='admin');
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">All people</div><div class="card-sub">${nonAdmin.length} member${nonAdmin.length!==1?'s':''}</div></div>
+      <button class="btn btn-success btn-sm" onclick="openModal('person')">+ Add person</button>
+    </div>
+    <div class="tbl-wrap">
+    <table class="tbl"><thead><tr><th>Name</th><th>Role</th><th>Dept</th><th>Logs</th><th>Actions</th></tr></thead>
+    <tbody>${nonAdmin.map(p=>{
+      const cnt = state.logs.filter(l=>l.personId===p.id).length;
+      return `<tr>
+        <td><div class="tbl-person">${avatarHTML(p,'av-sm')}<div><div style="font-weight:500;">${esc(p.name)}</div></div></div></td>
+        <td><span class="badge badge-${p.role}">${p.role}</span></td>
+        <td class="text-secondary">${esc(p.dept)}</td>
+        <td class="text-secondary">${cnt}</td>
+        <td><div class="btn-group">
+          <button class="btn btn-warning btn-sm" onclick="setState({modal:'editperson',editPersonId:${p.id}})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="removePerson(${p.id})">Remove</button>
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function adminLeaves() {
+  const leaves = [...state.leaves].sort((a,b)=>b.date.localeCompare(a.date));
+  const pending = leaves.filter(l=>l.status==='pending');
+  const others = leaves.filter(l=>l.status!=='pending');
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">Leave requests</div><div class="card-sub">${pending.length} pending</div></div>
+    </div>
+    ${pending.length===0?'<div class="empty-state">No pending leave requests 🎉</div>':''}
+    ${pending.map(l=>{ const p=personOf(l.personId); return `<div class="leave-card">
+      <div class="leave-card-header">
+        <div class="flex items-center gap-2">${avatarHTML(p,'av-xs')}<span class="leave-card-name">${esc(p.name)}</span><span class="badge badge-${p.role}">${p.role}</span></div>
+        <span class="badge badge-pending">Pending</span>
+      </div>
+      <div class="leave-card-meta">${esc(l.type)} · ${l.from} to ${l.to} · Filed ${l.date}</div>
+      ${l.reason?`<div class="leave-card-reason">${esc(l.reason)}</div>`:''}
+      <div class="btn-group" style="margin-top:10px;">
+        <button class="btn btn-success btn-sm" onclick="approveLeave(${l.id})">✓ Approve</button>
+        <button class="btn btn-danger btn-sm" onclick="rejectLeave(${l.id})">✕ Reject</button>
+      </div>
+    </div>`; }).join('')}
+    ${others.length?`<div class="sep"></div><div class="card-title" style="margin-bottom:10px;font-size:12px;color:var(--text-secondary);">Past requests</div>
+    ${others.map(l=>{ const p=personOf(l.personId); return `<div class="leave-card" style="opacity:.7;">
+      <div class="leave-card-header">
+        <div class="flex items-center gap-2">${avatarHTML(p,'av-xs')}<span class="leave-card-name">${esc(p.name)}</span></div>
+        <span class="badge badge-${l.status}">${l.status}</span>
+      </div>
+      <div class="leave-card-meta">${esc(l.type)} · ${l.from} to ${l.to}</div>
+    </div>`; }).join('')}`:''}
+  </div>`;
+}
+
+function adminDeptReport() {
+  const ff=state.sfFrom, ft2=state.sfTo;
+  const fl = state.logs.filter(l=>(!ff||l.date>=ff)&&(!ft2||l.date<=ft2));
+  const nonAdmin = state.people.filter(p=>p.role!=='admin');
+  const depts = [...new Set(nonAdmin.map(p=>p.dept))].sort();
+  const maxH = Math.max(1,...depts.map(d=>{
+    const ids = nonAdmin.filter(p=>p.dept===d).map(p=>p.id);
+    return fl.filter(l=>ids.includes(l.personId)).reduce((s,l)=>{const h=ch(l.in,l.out,l.lunchOut,l.lunchIn);return s+(h||0);},0);
+  }));
+  const deptData = depts.map(d=>{
+    const members = nonAdmin.filter(p=>p.dept===d);
+    const ids = members.map(p=>p.id);
+    const dLogs = fl.filter(l=>ids.includes(l.personId));
+    const tot = dLogs.reduce((s,l)=>{const h=ch(l.in,l.out,l.lunchOut,l.lunchIn);return s+(h||0);},0);
+    const days = dLogs.filter(l=>ch(l.in,l.out,l.lunchOut,l.lunchIn)!==null).length;
+    const late = dLogs.filter(l=>isLate(l.in,l.personId,l.date)).length;
+    return {dept:d, members:members.length, hours:tot, days, late, avg: members.length?tot/members.length:0};
+  }).sort((a,b)=>b.hours-a.hours);
+
+  return `<div class="card">
+    <div class="card-header"><div class="card-title">Department report</div>
+      <div class="btn-group">
+        <button class="btn btn-sm" onclick="exportCSV(${JSON.stringify(deptData).replace(/'/g,"&#39;").replace(/</g,'&lt;')},'dept_report.csv')">CSV</button>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <div class="form-group"><label class="form-label">From</label><input type="date" class="form-input" value="${state.sfFrom}" onchange="setState({sfFrom:this.value})"></div>
+      <div class="form-group"><label class="form-label">To</label><input type="date" class="form-input" value="${state.sfTo}" onchange="setState({sfTo:this.value})"></div>
+      <button class="btn btn-sm" onclick="setState({sfFrom:'',sfTo:''})">Clear</button>
+    </div>
+    <div style="margin-bottom:20px;">
+      ${deptData.map(d=>`
+      <div class="dept-bar">
+        <div class="dept-bar-label" title="${esc(d.dept)}">${esc(d.dept)}</div>
+        <div class="dept-bar-track"><div class="dept-bar-fill" style="width:${Math.round((d.hours/maxH)*100)}%;"></div></div>
+        <div class="dept-bar-val">${d.hours.toFixed(0)}h</div>
+      </div>`).join('')}
+    </div>
+    <div class="tbl-wrap">
+    <table class="tbl"><thead><tr><th>Department</th><th>Members</th><th>Total hours</th><th>Avg hrs/person</th><th>Days logged</th><th>Late arrivals</th></tr></thead>
+    <tbody>${deptData.map(d=>`<tr>
+      <td style="font-weight:500;">${esc(d.dept)}</td>
+      <td class="text-secondary">${d.members}</td>
+      <td><span class="hpill hpill-done">${d.hours.toFixed(2)}h</span></td>
+      <td class="text-secondary">${d.avg.toFixed(2)}h</td>
+      <td class="text-secondary">${d.days}</td>
+      <td>${d.late>0?`<span class="badge badge-late">${d.late}</span>`:'<span class="text-muted">0</span>'}</td>
+    </tr>`).join('')}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function getWeekDates(offsetWeeks) {
+  const now = new Date();
+  const dow = now.getDay(); // 0=Sun
+  const monday = new Date(now); monday.setDate(now.getDate() - dow + (dow===0?-6:1));
+  monday.setDate(monday.getDate() + offsetWeeks*7);
+  const dates = [];
+  for(let i=0;i<7;i++){
+    const d = new Date(monday); d.setDate(monday.getDate()+i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+}
+const typeColors = {shift:'type-shift',meeting:'type-meeting',event:'type-event',offday:'type-offday'};
+const typeIcons = {shift:'🟢',meeting:'🟣',event:'🟡',offday:'🔴'};
+
+function adminSchedule() {
+  const nonAdmin = state.people.filter(p=>p.role!=='admin');
+  const offset = state.schedWeekOffset||0;
+  const weekDates = getWeekDates(offset);
+  const startLabel = weekDates[0]; const endLabel = weekDates[6];
+
+  let dayHeaders = weekDates.map((ds,i)=>{
+    const d = new Date(ds);
+    const isToday = ds===TODAY;
+    const dName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    const dNum = d.getDate();
+    return `<div class="sched-day-col">
+      <div class="sched-day-hdr ${isToday?'today-hdr':''}">${dName} ${dNum}</div>
+      <div class="sched-day-body" id="sched-day-${ds}">
+        ${schedForDate(ds,null).map(s=>{
+          const ids = s.personIds || (s.personId==='all'?['all']:s.personId?[s.personId]:[]);
+          const pLabel = ids.includes('all') ? 'All staff' : ids.map(id=>{ const p=personOf(id); return p.name.split(' ')[0]; }).join(', ');
+          return `<div class="sched-entry ${typeColors[s.type]||''}" onclick="openSchedModal('${ds}',${s.id})" title="${esc(s.title)} — ${esc(pLabel)}">
+            <div class="sched-entry-name">${typeIcons[s.type]||''} ${esc(s.title)}</div>
+            <div class="sched-entry-time">${s.startTime?s.startTime+(s.endTime?'–'+s.endTime:''):'All day'}</div>
+            <div class="sched-entry-time" style="opacity:.6;">${esc(pLabel.length>18?pLabel.slice(0,16)+'…':pLabel)}</div>
+          </div>`;
+        }).join('')}
+        <button class="sched-add-btn" onclick="openSchedModal('${ds}')">+ Add</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // List view of upcoming schedules (next 14 days) per person
+  const upcoming = [];
+  for(let i=0;i<14;i++){
+    const d = new Date(); d.setDate(d.getDate()+i);
+    const ds = d.toISOString().split('T')[0];
+    const entries = schedForDate(ds,null);
+    if(entries.length) upcoming.push({ds,entries});
+  }
+
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">Work Schedule Planner</div><div class="card-sub">Manage and publish schedules for all staff</div></div>
+      <button class="btn btn-primary btn-sm" onclick="openSchedModal('${TODAY}')">+ Add entry</button>
+    </div>
+    <div class="sched-week-nav">
+      <button class="btn btn-sm" onclick="setState({schedWeekOffset:(state.schedWeekOffset||0)-1})">← Prev week</button>
+      <div class="sched-week-nav-title">${startLabel} — ${endLabel}</div>
+      <button class="btn btn-sm" onclick="setState({schedWeekOffset:(state.schedWeekOffset||0)+1})">Next week →</button>
+    </div>
+    <div class="sched-week">${dayHeaders}</div>
+    <div class="sched-legend">
+      <span style="font-size:11px;color:var(--text-muted);font-weight:600;">LEGEND:</span>
+      <div class="sched-legend-item"><div class="sched-legend-dot" style="background:var(--green-light);border:1px solid var(--green-mid);"></div>Shift</div>
+      <div class="sched-legend-item"><div class="sched-legend-dot" style="background:var(--purple-light);border:1px solid var(--purple-mid);"></div>Meeting</div>
+      <div class="sched-legend-item"><div class="sched-legend-dot" style="background:var(--amber-light);border:1px solid var(--amber-mid);"></div>Event</div>
+      <div class="sched-legend-item"><div class="sched-legend-dot" style="background:var(--red-light);border:1px solid var(--red-mid);"></div>Day off / Holiday</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Upcoming 14 days</div></div>
+    ${upcoming.length===0?'<div class="empty-state">No schedule entries in the next 14 days.</div>':''}
+    ${upcoming.map(({ds,entries})=>{
+      const d=new Date(ds);
+      const dName=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+      return `<div style="margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">${dName}, ${ds}${ds===TODAY?' — Today':''}</div>
+        ${entries.map(s=>{
+          const ids = s.personIds || (s.personId==='all'?['all']:s.personId?[s.personId]:[]);
+          const pLabel = ids.includes('all') ? 'All staff' : ids.map(id=>personOf(id).name||'?').join(', ');
+          return `<div class="sched-member-view" style="cursor:pointer;" onclick="openSchedModal('${ds}',${s.id})">
+            <div style="width:10px;height:10px;border-radius:2px;flex-shrink:0;margin-top:3px;background:${s.type==='shift'?'var(--green)':s.type==='meeting'?'var(--purple)':s.type==='event'?'var(--amber)':'var(--red)'}"></div>
+            <div class="sched-member-entries">
+              <div style="font-weight:600;font-size:13px;">${typeIcons[s.type]||''} ${esc(s.title)}</div>
+              <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">
+                ${s.startTime?s.startTime+(s.endTime?' – '+s.endTime:''):'All day'} · ${esc(pLabel)}
+                ${s.repeat!=='none'?`· <span class="badge" style="font-size:9px;padding:1px 6px;background:var(--bg);border:1px solid var(--border);">${s.repeat}</span>`:''}
+              </div>
+              ${s.note?`<div style="font-size:11px;color:var(--text-muted);margin-top:3px;">${esc(s.note)}</div>`:''}
+            </div>
+            <button class="btn btn-warning btn-sm" style="flex-shrink:0;">Edit</button>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function memberSchedule() {
+  const u = state.user;
+  const offset = state.schedWeekOffset||0;
+  const weekDates = getWeekDates(offset);
+  const startLabel = weekDates[0]; const endLabel = weekDates[6];
+
+  // Weekly view for this member
+  let dayHeaders = weekDates.map((ds)=>{
+    const d = new Date(ds);
+    const isToday = ds===TODAY;
+    const dName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    const dNum = d.getDate();
+    const myEntries = schedForDate(ds, u.id);
+    return `<div class="sched-day-col">
+      <div class="sched-day-hdr ${isToday?'today-hdr':''}">${dName}<br>${dNum}</div>
+      <div class="sched-day-body">
+        ${myEntries.length===0?`<div style="font-size:10px;color:var(--text-muted);text-align:center;padding:8px 4px;">—</div>`:''}
+        ${myEntries.map(s=>`<div class="sched-entry ${typeColors[s.type]||''}" title="${esc(s.title)}">
+          <div class="sched-entry-name">${typeIcons[s.type]||''} ${esc(s.title)}</div>
+          <div class="sched-entry-time">${s.startTime?s.startTime+(s.endTime?'–'+s.endTime:''):'All day'}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Upcoming entries list
+  const upcoming = [];
+  for(let i=0;i<30;i++){
+    const d = new Date(); d.setDate(d.getDate()+i);
+    const ds = d.toISOString().split('T')[0];
+    const entries = schedForDate(ds, u.id);
+    if(entries.length) upcoming.push({ds,entries});
+  }
+
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">My Work Schedule</div><div class="card-sub">Your assigned shifts, meetings, and events</div></div>
+    </div>
+    <div class="sched-week-nav">
+      <button class="btn btn-sm" onclick="setState({schedWeekOffset:(state.schedWeekOffset||0)-1})">← Prev week</button>
+      <div class="sched-week-nav-title">${startLabel} — ${endLabel}</div>
+      <button class="btn btn-sm" onclick="setState({schedWeekOffset:(state.schedWeekOffset||0)+1})">Next week →</button>
+    </div>
+    <div class="sched-week">${dayHeaders}</div>
+    <div class="sched-legend">
+      <div class="sched-legend-item"><div class="sched-legend-dot" style="background:var(--green-light);border:1px solid var(--green-mid);"></div>Shift</div>
+      <div class="sched-legend-item"><div class="sched-legend-dot" style="background:var(--purple-light);border:1px solid var(--purple-mid);"></div>Meeting</div>
+      <div class="sched-legend-item"><div class="sched-legend-dot" style="background:var(--amber-light);border:1px solid var(--amber-mid);"></div>Event</div>
+      <div class="sched-legend-item"><div class="sched-legend-dot" style="background:var(--red-light);border:1px solid var(--red-mid);"></div>Day off</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Upcoming 30 days</div></div>
+    ${upcoming.length===0?'<div class="empty-state">No scheduled entries in the next 30 days.</div>':''}
+    ${upcoming.map(({ds,entries})=>{
+      const d=new Date(ds);
+      const dName=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+      return `<div class="sched-member-view" style="flex-direction:column;gap:6px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;">${dName}, ${ds}${ds===TODAY?' — Today':''}</div>
+        ${entries.map(s=>`<div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:8px;height:8px;border-radius:2px;flex-shrink:0;background:${s.type==='shift'?'var(--green)':s.type==='meeting'?'var(--purple)':s.type==='event'?'var(--amber)':'var(--red)'}"></div>
+          <div>
+            <span style="font-weight:600;">${typeIcons[s.type]||''} ${esc(s.title)}</span>
+            <span style="color:var(--text-secondary);font-size:11px;margin-left:6px;">${s.startTime?s.startTime+(s.endTime?' – '+s.endTime:''):'All day'}</span>
+            ${s.note?`<span style="color:var(--text-muted);font-size:11px;margin-left:6px;">· ${esc(s.note)}</span>`:''}
+          </div>
+        </div>`).join('')}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function adminShifts() {
+  const s = state.shifts;
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">Shift settings</div><div class="card-sub">Applies to all roles</div></div>
+      <button class="btn btn-primary btn-sm" onclick="openModal('shifts')">Edit settings</button>
+    </div>
+    <div class="stats-grid stats-grid-3" style="margin-bottom:0;">
+      <div class="stat-card"><div class="stat-num" style="font-size:20px;">${ft(s.startTime)}</div><div class="stat-lbl">Shift start</div></div>
+      <div class="stat-card"><div class="stat-num" style="font-size:20px;">${ft(s.endTime)}</div><div class="stat-lbl">Shift end</div></div>
+      <div class="stat-card"><div class="stat-num" style="font-size:20px;">${s.maxHours}h</div><div class="stat-lbl">OT threshold</div></div>
+    </div>
+    <div class="sep"></div>
+    <div style="font-size:13px;color:var(--text-secondary);">
+      <div style="margin-bottom:6px;">• Employees arriving more than <strong>5 minutes</strong> after <strong>${ft(s.startTime)}</strong> are flagged as <span class="badge badge-late">Late</span></div>
+      <div style="margin-bottom:6px;">• Shifts exceeding <strong>${s.maxHours} hours</strong> are flagged as <span class="badge badge-overtime">OT</span></div>
+      <div>• These flags appear in Time Logs, Summary, and the Admin Dashboard.</div>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MEMBER PAGES
+// ═══════════════════════════════════════════════════════════════════
+
+function memberDashboard() {
+  const u = state.user;
+  const log = todayLog(u.id);
+  const inn = log?.in||''; const out = log?.out||''; const lunchOut = log?.lunchOut||''; const lunchIn = log?.lunchIn||'';
+  const hrs = ch(inn,out,lunchOut,lunchIn);
+  const myAllLogs = myLogs(u.id);
+  const totalH = myAllLogs.reduce((s,l)=>{const h=ch(l.in,l.out,l.lunchOut,l.lunchIn);return s+(h||0);},0);
+  const days = myAllLogs.filter(l=>ch(l.in,l.out,l.lunchOut,l.lunchIn)!==null).length;
+  const lateDays = myAllLogs.filter(l=>isLate(l.in,u.id,l.date)).length;
+  const onLunch = !!(inn && lunchOut && !lunchIn && !out);
+  const done_ = !!(inn && out);
+  let quickBtnLabel_, quickBtnClass_;
+  if (!inn) { quickBtnLabel_='Check In'; quickBtnClass_='btn-success'; }
+  else if (inn && !lunchOut && !out) { quickBtnLabel_='Start Lunch'; quickBtnClass_='btn-warning'; }
+  else if (onLunch) { quickBtnLabel_='Back from Lunch'; quickBtnClass_='btn-primary'; }
+  else if (inn && lunchIn && !out) { quickBtnLabel_='Check Out'; quickBtnClass_='btn-danger'; }
+  else { quickBtnLabel_='Done'; quickBtnClass_=''; }
+  const status = inn?(out?'out':onLunch?'lunch':'in'):'absent';
+  const myLeaves = state.leaves.filter(l=>l.personId===u.id&&l.status==='approved').length;
+
+  return `
+  <div style="display:flex;align-items:center;gap:16px;padding:20px 22px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;box-shadow:var(--shadow);">
+    ${avatarHTML(u,'av-lg')}
+    <div style="flex:1;">
+      <div style="font-size:18px;font-weight:600;letter-spacing:-.01em;">${esc(u.name)}</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:5px;">
+        <span class="badge badge-${u.role}">${u.role}</span>
+        <span class="text-secondary text-sm">${esc(u.dept)}</span>
+      </div>
+    </div>
+    ${!done_?`<button class="btn ${quickBtnClass_} btn-lg" style="font-size:14px;padding:10px 20px;min-width:130px;" onclick="setState({navPage:'scan'})">${quickBtnLabel_}</button>`
+    :`<span class="hpill hpill-done" style="font-size:13px;padding:6px 14px;">✅ ${fh(hrs)} today</span>`}
+  </div>
+  <div class="stats-grid stats-grid-4">
+    <div class="stat-card"><div class="stat-num">${totalH.toFixed(1)}h</div><div class="stat-lbl">Total hours</div></div>
+    <div class="stat-card"><div class="stat-num">${days}</div><div class="stat-lbl">Days logged</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:${lateDays>0?'var(--amber)':'var(--text)'}">${lateDays}</div><div class="stat-lbl">Late arrivals</div></div>
+    <div class="stat-card"><div class="stat-num">${myLeaves}</div><div class="stat-lbl">Approved leaves</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px;">Today — ${TODAY}</div>
+    <div class="stats-grid stats-grid-3">
+      <div class="stat-card"><div class="stat-lbl">Status</div><div style="margin-top:6px;"><span class="badge badge-${status}" style="font-size:13px;padding:4px 10px;">${status}</span>${isLate(inn,u.id,TODAY)?`<span class="badge badge-late" style="margin-left:4px;">Late</span>`:''}</div></div>
+      <div class="stat-card"><div class="stat-lbl">Login</div><div style="font-size:16px;font-weight:600;color:var(--green);margin-top:4px;">${ft(inn)}</div></div>
+      <div class="stat-card"><div class="stat-lbl">Logout</div><div style="font-size:16px;font-weight:600;color:var(--red);margin-top:4px;">${ft(out)}</div></div>
+    </div>
+    ${lunchOut?`<div style="font-size:12px;color:var(--amber);text-align:center;margin-top:6px;">🍽 Lunch: ${ft(lunchOut)}${lunchIn?' → '+ft(lunchIn)+' ('+(lunchDur(lunchOut,lunchIn)||'?')+'m)':' (on break)'}</div>`:''}
+    ${hrs!==null?`<div style="text-align:center;margin-top:8px;"><span class="hpill ${isOvertime(hrs)?'hpill-ot':'hpill-done'}" style="font-size:13px;padding:4px 14px;">Today: ${fh(hrs)} net${lunchIn?' (excl. lunch)':''}${isOvertime(hrs)?' (overtime)':''}</span></div>`:''}
+  </div>
+  ${(()=>{ const todaySched = schedForDate(TODAY, u.id); if(!todaySched.length) return ''; return `<div class="card">
+    <div class="card-header"><div class="card-title">📅 Today's schedule</div><button class="btn btn-sm" onclick="setState({navPage:'schedule'})">View all →</button></div>
+    ${todaySched.map(s=>`<div class="sched-member-view">
+      <div style="width:10px;height:10px;border-radius:2px;flex-shrink:0;margin-top:3px;background:${s.type==='shift'?'var(--green)':s.type==='meeting'?'var(--purple)':s.type==='event'?'var(--amber)':'var(--red)'}"></div>
+      <div class="sched-member-entries">
+        <div style="font-weight:600;">${typeIcons[s.type]||''} ${esc(s.title)}</div>
+        <div style="font-size:11px;color:var(--text-secondary);">${s.startTime?s.startTime+(s.endTime?' – '+s.endTime:''):'All day'}${s.note?' · '+esc(s.note):''}</div>
+      </div>
+    </div>`).join('')}
+  </div>`; })()}
+`;}
+
+function memberScan() {
+  const u = state.user;
+  const log = todayLog(u.id);
+  const inn = log?.in||''; const out = log?.out||'';
+  const lunchOut = log?.lunchOut||''; const lunchIn = log?.lunchIn||'';
+  const hrs = ch(inn,out,lunchOut,lunchIn);
+  const onLunch = !!(inn && lunchOut && !lunchIn && !out);
+  const done = !!(inn && out);
+
+  let action, btnLabel, btnClass, statusMsg, icon;
+  if (!inn) {
+    action='in'; btnLabel='Check In'; btnClass='btn-success';
+    icon='👋'; statusMsg=`Good ${new Date().getHours()<12?'morning':new Date().getHours()<17?'afternoon':'evening'}, ${u.name.split(' ')[0]}! Ready to clock in?`;
+  } else if (inn && !lunchOut && !out) {
+    action='lunch_out'; btnLabel='Start Lunch Break'; btnClass='btn-warning';
+    icon='🍽'; statusMsg=`Checked in at ${ft(inn)}`;
+  } else if (onLunch) {
+    action='lunch_in'; btnLabel='Back from Lunch'; btnClass='btn-primary';
+    icon='↩'; statusMsg=`On lunch since ${ft(lunchOut)}`;
+  } else if (inn && lunchIn && !out) {
+    action='out'; btnLabel='Check Out'; btnClass='btn-danger';
+    icon='👋'; statusMsg=`Back from lunch at ${ft(lunchIn)}`;
+  } else {
+    action='done'; btnLabel='See you tomorrow!'; btnClass='';
+    icon='✅'; statusMsg=`Great work today!`;
+  }
+
+  const lm = lunchDur(lunchOut, lunchIn);
+
+  return `
+  <div class="card" style="max-width:480px;margin:0 auto;">
+    <div style="text-align:center;padding:12px 0 20px;">
+      ${avatarHTML(u,'av-lg')}
+      <div style="font-size:20px;font-weight:600;margin-top:12px;">${esc(u.name)}</div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">${esc(u.dept)} · <span class="badge badge-${u.role}">${u.role}</span></div>
+    </div>
+
+    <div style="background:var(--bg);border-radius:var(--radius);padding:16px;text-align:center;margin-bottom:20px;">
+      <div style="font-size:28px;margin-bottom:6px;">${icon}</div>
+      <div style="font-size:15px;font-weight:500;margin-bottom:4px;">${esc(statusMsg)}</div>
+      <div style="font-size:12px;color:var(--text-muted);">${TODAY}</div>
+    </div>
+
+    ${done ? `
+    <div style="text-align:center;padding:8px 0 16px;">
+      <span class="hpill ${isOvertime(hrs)?'hpill-ot':'hpill-done'}" style="font-size:14px;padding:6px 18px;">
+        ${fh(hrs)} logged today${isOvertime(hrs)?' · Overtime':''}</span>
+    </div>` : `
+    <button class="btn ${btnClass} btn-lg btn-full" style="font-size:15px;padding:14px;" onclick="quickScan(${u.id})">
+      ${btnLabel}${action==='in'?' 📸':''}
+    </button>
+    ${action==='in'?'<div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:8px;">📸 A selfie is required to check in</div>':''}`}
+
+    ${inn ? `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px;text-align:center;">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 6px;">
+        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">In</div>
+        <div style="font-size:13px;font-weight:600;color:var(--green);">${ft(inn)}</div>
+      </div>
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 6px;">
+        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Lunch</div>
+        <div style="font-size:13px;font-weight:600;color:var(--amber);">${lunchOut?ft(lunchOut):'—'}</div>
+      </div>
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 6px;">
+        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Back</div>
+        <div style="font-size:13px;font-weight:600;color:var(--amber);">${lunchIn?ft(lunchIn)+(lm?` (${lm}m)`:''):'—'}</div>
+      </div>
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:10px 6px;">
+        <div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">Out</div>
+        <div style="font-size:13px;font-weight:600;color:var(--red);">${out?ft(out):'—'}</div>
+      </div>
+    </div>
+    ${hrs!==null?`<div style="text-align:center;margin-top:12px;font-size:12px;color:var(--text-secondary);">Net hours today: <strong>${fh(hrs)}</strong>${lm?` · Lunch: ${lm}m`:''}</div>`:''}
+    ` : ''}
+  </div>`;
+}
+
+
+function memberHistory() {
+  const u = state.user;
+  const logs = myLogs(u.id);
+  const totalH = logs.reduce((s,l)=>{const h=ch(l.in,l.out,l.lunchOut,l.lunchIn);return s+(h||0);},0);
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">My attendance history</div><div class="card-sub">Total: <strong>${totalH.toFixed(2)}h</strong> across ${logs.length} log${logs.length!==1?'s':''}</div></div>
+      <div class="btn-group">
+        <button class="btn btn-sm" onclick="exportCSV(logRows(myLogs(state.user.id)),'my_history.csv')">CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="exportXLSX(logRows(myLogs(state.user.id)),'My History','my_history.xlsx')">Excel</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+    <table class="tbl"><thead><tr><th>Date</th><th>Login</th><th>Lunch Break</th><th>Logout</th><th>Net Hours</th><th>Flags</th></tr></thead>
+    <tbody>${logs.length?logs.map(l=>{ const hrs=ch(l.in,l.out,l.lunchOut,l.lunchIn); const lm=lunchDur(l.lunchOut,l.lunchIn); return `<tr>
+      <td class="text-secondary">${l.date}</td>
+      <td class="text-success" style="font-weight:500;">${ft(l.in)}</td>
+      <td style="color:var(--amber);font-size:12px;">${l.lunchOut?(ft(l.lunchOut)+(l.lunchIn?" → "+ft(l.lunchIn)+(lm?" ("+lm+"m)":""):" (out)")):"—"}</td>
+      <td class="text-danger">${l.out?ft(l.out):'<span class="text-muted">Active</span>'}</td>
+      <td>${hrs!==null?`<span class="hpill ${isOvertime(hrs)?'hpill-ot':'hpill-done'}">${fh(hrs)}</span>`:`<span class="hpill hpill-active">In progress</span>`}</td>
+      <td>${isLate(l.in,u.id,l.date)?`<span class="badge badge-late">Late</span> `:''} ${isOvertime(hrs)?`<span class="badge badge-overtime">OT</span>`:''}</td>
+    </tr>`; }).join(''):`<tr><td colspan="6" class="empty-state">No history yet.</td></tr>`}</tbody></table>
+    </div>
+  </div>`;
+}
+
+function memberCalendar() {
+  const u = state.user;
+  const year = state.calYear; const month = state.calMonth;
+  const logs = myLogs(u.id);
+  const logMap = {};
+  logs.forEach(l=>{ logMap[l.date]={in:l.in,out:l.out}; });
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const todayStr = TODAY;
+
+  let cells = '';
+  for(let i=0;i<firstDay;i++) cells+=`<div class="cal-cell empty"></div>`;
+  for(let d=1;d<=daysInMonth;d++) {
+    const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const log = logMap[ds];
+    let cls = 'cal-cell';
+    let dot = '';
+    if (log) {
+      if (isLate(log.in, u.id, ds)) { cls+=' has-late'; dot=`<div class="cal-dot" style="background:var(--amber);"></div>`; }
+      else { cls+=' has-in'; dot=`<div class="cal-dot" style="background:var(--green);"></div>`; }
+    }
+    const hasSched = schedForDate(ds, u.id).length > 0;
+    if (hasSched) cls+=' has-sched';
+    if (ds===todayStr) cls+=' today';
+    cells+=`<div class="${cls}" title="${log?`In: ${ft(log.in)} Out: ${ft(log.out)}`:'No log'}${hasSched?' · Has schedule':''}">${d}${dot}${hasSched?`<div class="cal-dot" style="background:var(--purple);"></div>`:''}</div>`;
+  }
+  const totalH = logs.filter(l=>l.date.startsWith(`${year}-${String(month+1).padStart(2,'0')}`)).reduce((s,l)=>{const h=ch(l.in,l.out,l.lunchOut,l.lunchIn);return s+(h||0);},0);
+
+  return `<div class="card">
+    <div class="cal-nav">
+      <button class="btn btn-sm" onclick="setState({calMonth:state.calMonth===0?11:state.calMonth-1,calYear:state.calMonth===0?state.calYear-1:state.calYear})">← Prev</button>
+      <div class="cal-nav-title">${monthNames[month]} ${year}</div>
+      <button class="btn btn-sm" onclick="setState({calMonth:state.calMonth===11?0:state.calMonth+1,calYear:state.calMonth===11?state.calYear+1:state.calYear})">Next →</button>
+    </div>
+    <div class="cal-grid" style="margin-bottom:10px;">
+      ${dayNames.map(d=>`<div class="cal-day-hdr">${d}</div>`).join('')}
+      ${cells}
+    </div>
+    <div style="display:flex;gap:16px;font-size:11px;color:var(--text-secondary);margin-top:10px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:4px;"><div style="width:10px;height:10px;border-radius:2px;background:var(--green-light);border:1px solid var(--green-mid);"></div> On time</div>
+      <div style="display:flex;align-items:center;gap:4px;"><div style="width:10px;height:10px;border-radius:2px;background:var(--amber-light);border:1px solid var(--amber-mid);"></div> Late</div>
+      <div style="display:flex;align-items:center;gap:4px;"><div style="width:10px;height:10px;border-radius:2px;border:2px solid var(--purple);"></div> Scheduled</div>
+      <div style="display:flex;align-items:center;gap:4px;"><div style="width:10px;height:10px;border-radius:2px;border:1.5px solid var(--blue);"></div> Today</div>
+      <div style="margin-left:auto;font-weight:500;color:var(--text);">Month total: ${totalH.toFixed(1)}h</div>
+    </div>
+  </div>`;
+}
+
+function memberLeaves() {
+  const u = state.user;
+  const myLeavesAll = state.leaves.filter(l=>l.personId===u.id).sort((a,b)=>b.date.localeCompare(a.date));
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">My leave requests</div><div class="card-sub">${myLeavesAll.length} request${myLeavesAll.length!==1?'s':''}</div></div>
+      <button class="btn btn-primary btn-sm" onclick="openModal('leave')">+ Request leave</button>
+    </div>
+    ${myLeavesAll.length===0?'<div class="empty-state">No leave requests yet.</div>':''}
+    ${myLeavesAll.map(l=>`<div class="leave-card">
+      <div class="leave-card-header">
+        <div style="font-weight:500;">${esc(l.type)}</div>
+        <span class="badge badge-${l.status}">${l.status}</span>
+      </div>
+      <div class="leave-card-meta">${l.from} to ${l.to} · Filed ${l.date}</div>
+      ${l.reason?`<div class="leave-card-reason">${esc(l.reason)}</div>`:''}
+    </div>`).join('')}
+  </div>`;
+}
+
+function memberProfile() {
+  const u = state.user;
+  return `<div class="card">
+    <div class="card-header"><div class="card-title">My profile</div></div>
+    <div style="display:flex;align-items:center;gap:20px;margin-bottom:20px;">
+      ${avatarHTML(u,'av-lg')}
+      <div>
+        <div style="font-size:18px;font-weight:600;">${esc(u.name)}</div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">${esc(u.dept)} · <span class="badge badge-${u.role}">${u.role}</span></div>
+      </div>
+    </div>
+    <div class="sep"></div>
+    <div style="margin-bottom:8px;font-size:13px;font-weight:600;">Security</div>
+    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">Keep your account secure by using a strong password.</div>
+    <button class="btn btn-primary" onclick="openModal('changepass')">🔑 Change password</button>
+    <div class="sep"></div>
+    <div style="font-size:12px;color:var(--text-muted);">To update your name, department, or photo, ask your admin.</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════════════════════════════
+function renderApp() {
+  const u = state.user;
+  const isAdmin = u.role==='admin';
+  const nav = isAdmin ? adminNav : memberNav;
+  let content = '';
+
+  if (isAdmin) {
+    if (state.navPage==='dashboard') content = adminDashboard();
+    else if (state.navPage==='scan') content = adminScanPage();
+    else if (state.navPage==='logs') content = adminLogs();
+    else if (state.navPage==='summary') content = adminSummary();
+    else if (state.navPage==='people') content = adminPeople();
+    else if (state.navPage==='leaves') content = adminLeaves();
+    else if (state.navPage==='schedrequests') content = adminSchedRequests();
+    else if (state.navPage==='deptreport') content = adminDeptReport();
+    else if (state.navPage==='schedule') content = adminSchedule();
+    else if (state.navPage==='teams') content = adminTeams();
+    else if (state.navPage==='shifts') content = adminShifts();
+  } else {
+    if (state.navPage==='dashboard') content = memberDashboard();
+    else if (state.navPage==='scan') content = memberScan();
+    else if (state.navPage==='history') content = memberHistory();
+    else if (state.navPage==='calendar') content = memberCalendar();
+    else if (state.navPage==='schedule') content = memberSchedule();
+    else if (state.navPage==='schedrequest') content = memberSchedRequest();
+    else if (state.navPage==='leaves') content = memberLeaves();
+    else if (state.navPage==='profile') content = memberProfile();
+  }
+
+  return `<div id="app-inner">
+    ${renderTopbar()}
+    <div class="layout">
+      <div class="sidenav">
+        <div style="padding:0 0 8px;">${renderSidenav(nav)}</div>
+      </div>
+      <div class="main">
+        ${renderModal()}
+        ${content}
+      </div>
+    </div>
+    ${renderMobileNav(nav)}
+  </div>`;
+}
+
+function render() {
+  if (state.screen==='loading') {
+    document.getElementById('app').innerHTML = `<div class="login-wrap"><div style="text-align:center;color:var(--text-secondary);font-size:13px;">Loading…</div></div>`;
+    return;
+  }
+  document.getElementById('app').innerHTML = state.screen==='login' ? renderLogin() : renderApp();
+}
+
+// ─── Camera / Check-in Photo helpers ──────────────────────────────────────
+let _cameraStream = null;
+function startCamera() {
+  const video = document.getElementById('ci-video');
+  const placeholder = document.getElementById('ci-placeholder');
+  const captureBtn = document.getElementById('ci-capture-btn');
+  if (!video) return;
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(stream => {
+      _cameraStream = stream;
+      video.srcObject = stream;
+      video.style.display = 'block';
+      placeholder.style.display = 'none';
+      captureBtn.style.display = 'inline-flex';
+    })
+    .catch(() => showToast('Camera not available — please upload a photo instead'));
+}
+function capturePhoto() {
+  const video = document.getElementById('ci-video');
+  const canvas = document.getElementById('ci-canvas');
+  const preview = document.getElementById('ci-preview');
+  const captureBtn = document.getElementById('ci-capture-btn');
+  const retakeBtn = document.getElementById('ci-retake-btn');
+  if (!video || !canvas) return;
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video,0,0);
+  const data = canvas.toDataURL('image/jpeg', 0.7);
+  document.getElementById('ci-photo-data').value = data;
+  preview.src = data; preview.style.display = 'block';
+  video.style.display = 'none'; captureBtn.style.display = 'none';
+  retakeBtn.style.display = 'inline-flex';
+  if (_cameraStream) { _cameraStream.getTracks().forEach(t=>t.stop()); _cameraStream = null; }
+}
+function retakePhoto() {
+  const preview = document.getElementById('ci-preview');
+  const retakeBtn = document.getElementById('ci-retake-btn');
+  document.getElementById('ci-photo-data').value = '';
+  preview.style.display = 'none'; retakeBtn.style.display = 'none';
+  document.getElementById('ci-placeholder').style.display = 'flex';
+}
+function handleCheckinUpload(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = e.target.result;
+    document.getElementById('ci-photo-data').value = data;
+    const preview = document.getElementById('ci-preview');
+    preview.src = data; preview.style.display = 'block';
+    document.getElementById('ci-placeholder').style.display = 'none';
+    const retakeBtn = document.getElementById('ci-retake-btn');
+    if (retakeBtn) retakeBtn.style.display = 'inline-flex';
+  };
+  reader.readAsDataURL(file);
+}
+async function submitCheckinPhoto() {
+  const photo = document.getElementById('ci-photo-data')?.value;
+  if (!photo) { showToast('Please take or upload a photo first'); return; }
+  const pid = state._pendingCheckinPid;
+  if (_cameraStream) { _cameraStream.getTracks().forEach(t=>t.stop()); _cameraStream = null; }
+  await quickScan(pid, photo);
+}
+function closeCheckinModal() {
+  if (_cameraStream) { _cameraStream.getTracks().forEach(t=>t.stop()); _cameraStream = null; }
+  setState({ modal: null, _pendingCheckinPid: null });
+}
+
+// ─── Admin: Schedule Requests page ────────────────────────────────────────
+function adminSchedRequests() {
+  const reqs = state.scheduleRequests;
+  const pending = reqs.filter(r=>r.status==='pending');
+  const reviewed = reqs.filter(r=>r.status==='reviewed');
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">📅 Schedule Preferences from Staff</div><div class="card-sub">${pending.length} pending · ${reviewed.length} reviewed</div></div>
+    </div>
+    ${reqs.length===0?'<div class="empty-state">No schedule requests yet. Staff can send their preferred schedules from the app.</div>':''}
+    ${pending.length>0?`<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Pending</div>`:''}
+    ${pending.map(r=>{const p=personOf(r.personId); return `<div class="leave-card" style="margin-bottom:10px;">
+      <div class="leave-card-header">
+        <div style="display:flex;align-items:center;gap:8px;">${avatarHTML(p,'av-xs')}<span style="font-weight:500;">${esc(p.name)}</span><span class="badge badge-${p.role}">${p.role}</span></div>
+        <span class="badge badge-pending">Pending</span>
+      </div>
+      <div class="leave-card-meta">
+        Days: <strong>${esc(r.preferredDays)}</strong>
+        ${r.preferredStart?' · Time: '+ft(r.preferredStart)+' – '+ft(r.preferredEnd):''}
+        ${r.createdAt?' · Sent '+r.createdAt.split('T')[0]:''}
+      </div>
+      ${r.note?`<div class="leave-card-reason">${esc(r.note)}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button class="btn btn-success btn-sm" onclick="openSchedModalFromReq(${r.id})">+ Add to Schedule</button>
+        <button class="btn btn-sm" onclick="approveSchedReq(${r.id})">✓ Mark reviewed</button>
+        <button class="btn btn-danger btn-sm" onclick="dismissSchedReq(${r.id})">Dismiss</button>
+      </div>
+    </div>`;}).join('')}
+    ${reviewed.length>0?`<div class="sep"></div><div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Reviewed</div>`:''}
+    ${reviewed.map(r=>{const p=personOf(r.personId); return `<div class="leave-card" style="opacity:.65;">
+      <div class="leave-card-header"><div style="display:flex;align-items:center;gap:8px;">${avatarHTML(p,'av-xs')}<span style="font-weight:500;">${esc(p.name)}</span></div><span class="badge badge-approved">Reviewed</span></div>
+      <div class="leave-card-meta">Days: ${esc(r.preferredDays)}${r.preferredStart?' · Time: '+ft(r.preferredStart)+' – '+ft(r.preferredEnd):''}</div>
+      ${r.note?`<div class="leave-card-reason">${esc(r.note)}</div>`:''}
+      <button class="btn btn-danger btn-sm" style="margin-top:8px;" onclick="dismissSchedReq(${r.id})">Remove</button>
+    </div>`;}).join('')}
+  </div>`;
+}
+
+function openSchedModalFromReq(reqId) {
+  const req = state.scheduleRequests.find(r=>r.id===reqId);
+  if (!req) return;
+  // Pre-fill schedule modal with this request's info, assigned to person
+  setState({modal:'sched', editSchedId:null, schedPickDate:TODAY, _prefillReq: req});
+}
+
+// ─── Admin: Teams page ─────────────────────────────────────────────────────
+function adminTeams() {
+  const teams = state.teams;
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">👥 Teams</div><div class="card-sub">${teams.length} team${teams.length!==1?'s':''}</div></div>
+      <button class="btn btn-success btn-sm" onclick="setState({modal:'team',editTeamId:null})">+ Create team</button>
+    </div>
+    ${teams.length===0?'<div class="empty-state">No teams yet. Create your first team to organize your staff.</div>':''}
+    ${teams.map(t=>{
+      const members = state.people.filter(p=>t.memberIds.includes(p.id));
+      const todayPresent = members.filter(m=>todayLog(m.id)?.in).length;
+      return `<div style="border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;border-left:4px solid ${t.color};">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:12px;height:12px;border-radius:50%;background:${t.color};flex-shrink:0;"></div>
+            <div style="font-weight:600;font-size:15px;">${esc(t.name)}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">${members.length} member${members.length!==1?'s':''}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="badge badge-in">${todayPresent} present today</span>
+            <button class="btn btn-warning btn-sm" onclick="setState({modal:'team',editTeamId:${t.id}})">Edit</button>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          ${members.length===0?'<span class="text-muted" style="font-size:12px;">No members assigned</span>':''}
+          ${members.map(m=>{
+            const log=todayLog(m.id); const status=log?.in?(log?.out?'out':'in'):'absent';
+            return `<div style="display:flex;align-items:center;gap:6px;background:var(--bg);border-radius:6px;padding:6px 10px;border:1px solid var(--border);">
+              ${avatarHTML(m,'av-xs')}
+              <span style="font-size:12px;font-weight:500;">${esc(m.name.split(' ')[0])}</span>
+              <span class="badge badge-${status}" style="font-size:10px;">${status}</span>
+            </div>`;
+          }).join('')}
+        </div>
+        ${(()=>{
+          const weekDates=getWeekDates(state.schedWeekOffset||0);
+          const teamScheds=weekDates.map(ds=>({ds,entries:schedForDate(ds,null).filter(s=>members.some(m=>s.personIds?.includes(m.id)||s.personIds?.includes('all')))})).filter(x=>x.entries.length);
+          if(!teamScheds.length) return '<div style="font-size:11px;color:var(--text-muted);margin-top:10px;">No scheduled entries this week.</div>';
+          return `<div style="margin-top:12px;"><div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">This week</div>${teamScheds.map(({ds,entries})=>`<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;"><strong>${ds}</strong>: ${entries.map(e=>esc(e.title)).join(', ')}</div>`).join('')}</div>`;
+        })()}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── Member: Schedule Request page ────────────────────────────────────────
+function memberSchedRequest() {
+  const u = state.user;
+  const myReqs = state.scheduleRequests.filter(r=>r.personId===u.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">📅 Schedule Preferences</div><div class="card-sub">Send your preferred schedule to the admin</div></div>
+      <button class="btn btn-primary btn-sm" onclick="openModal('schedrequest')">+ New request</button>
+    </div>
+    <div style="background:var(--blue-light);border:1px solid var(--blue-mid);border-radius:var(--radius-sm);padding:12px 14px;font-size:13px;color:var(--blue);margin-bottom:16px;">
+      💡 Use this to let your admin know your preferred working days and hours. Your admin will see it and can create your schedule accordingly.
+    </div>
+    ${myReqs.length===0?'<div class="empty-state">No requests yet.</div>':''}
+    ${myReqs.map(r=>`<div class="leave-card" style="margin-bottom:10px;">
+      <div class="leave-card-header">
+        <div style="font-weight:500;">Days: ${esc(r.preferredDays)}</div>
+        <span class="badge badge-${r.status==='reviewed'?'approved':'pending'}">${r.status}</span>
+      </div>
+      <div class="leave-card-meta">
+        ${r.preferredStart?'Time: '+ft(r.preferredStart)+' – '+ft(r.preferredEnd)+' · ':''}
+        Sent ${r.createdAt?r.createdAt.split('T')[0]:TODAY}
+      </div>
+      ${r.note?`<div class="leave-card-reason">${esc(r.note)}</div>`:''}
+    </div>`).join('')}
+  </div>`;
+}
+
+bootstrap();
+
+// ─── Expose functions to window for inline onclick handlers ───────────────
+Object.assign(window, {
+  setState, doLogin, doLogout,
+  quickScan, adminScan,
+  openModal, closeModal,
+  saveLogModal, deleteLog,
+  savePersonModal, saveEditPersonModal, removePerson,
+  saveLeaveModal, approveLeave, rejectLeave,
+  openSchedModal, saveSchedModal, deleteSched, toggleSchedChip, getSchedSelIds,
+  saveShifts, changePassword,
+  handlePhotoUpload, renderPwStrength,
+  exportCSV, exportXLSX,
+  // New functions
+  saveScheduleRequest, approveSchedReq, dismissSchedReq, openSchedModalFromReq,
+  saveTeamModal, deleteTeam,
+  startCamera, capturePhoto, retakePhoto, handleCheckinUpload, submitCheckinPhoto, closeCheckinModal,
+});
+</script>
+</body>
+</html>

@@ -384,6 +384,11 @@ function dbTeamToApp(r) {
   try { memberIds = r.member_ids ? JSON.parse(r.member_ids) : []; } catch(e){}
   return { id: r.id, name: r.name, color: r.color||'#2563eb', memberIds };
 }
+function dbTrippingToApp(r) {
+  let applicants = [];
+  try { applicants = r.applicants ? JSON.parse(r.applicants) : []; } catch(e){}
+  return { id: r.id, title: r.title, destination: r.destination||'', date: r.date||'', time: r.time||'', carType: r.car_type||'', seats: r.seats||0, note: r.note||'', status: r.status||'open', applicants };
+}
 
 // ─── State ─────────────────────────────────────────────────────────────────
 const _cfg = loadConfig();
@@ -399,6 +404,7 @@ let state = {
   schedules: [],
   scheduleRequests: [],
   teams: [],
+  trippings: [],
   shifts: defaultShifts,
   modal: null,
   editId: null,
@@ -415,6 +421,10 @@ let state = {
   _error: null,
   moreOpen: false,
   editTeamId: null,
+  editTrippingId: null,
+  _adminScanPid: null,
+  _applyTrippingId: null,
+  _applyClients: null,
   _pendingCheckinPid: null,
   _prefillReq: null,
 };
@@ -442,7 +452,7 @@ async function bootstrap() {
 }
 
 async function loadAllData(person) {
-  const [pRes, lRes, lvRes, scRes, srRes, teRes, shRes] = await Promise.all([
+  const [pRes, lRes, lvRes, scRes, srRes, teRes, shRes, trRes] = await Promise.all([
     sb.from('people').select('*').order('id'),
     sb.from('logs').select('*').order('date', { ascending: false }),
     sb.from('leaves').select('*').order('filed_date', { ascending: false }),
@@ -450,6 +460,7 @@ async function loadAllData(person) {
     sb.from('schedule_requests').select('*').order('created_at', { ascending: false }),
     sb.from('teams').select('*').order('id'),
     sb.from('shifts').select('*').limit(1).single(),
+    sb.from('trippings').select('*').order('date', { ascending: true }),
   ]);
   let shifts = defaultShifts;
   if (shRes.data) shifts = dbShiftToApp(shRes.data);
@@ -463,6 +474,7 @@ async function loadAllData(person) {
     schedules: (scRes.data||[]).map(dbSchedToApp),
     scheduleRequests: (srRes.data||[]).map(dbSchedReqToApp),
     teams: (teRes.data||[]).map(dbTeamToApp),
+    trippings: (trRes.data||[]).map(dbTrippingToApp),
     shifts,
     _error: null,
   });
@@ -1117,6 +1129,7 @@ const adminNav = [
   {id:'deptreport',label:'Dept Report',icon:'<path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z" fill="currentColor"/>'},
   {id:'schedule',label:'Work Schedule',icon:'<path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5zm2 4h10v2H7zm0 4h7v2H7z" fill="currentColor"/>'},
   {id:'teams',label:'Teams',icon:'<path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/>'},
+  {id:'tripping',label:'Tripping Schedule',icon:'<path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" fill="currentColor"/>'},
   {id:'shifts',label:'Shift Settings',icon:'<path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z" fill="currentColor"/>'},
 ];
 const memberNav = [
@@ -1126,6 +1139,7 @@ const memberNav = [
   {id:'calendar',label:'My Calendar',icon:'<path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z" fill="currentColor"/>'},
   {id:'schedule',label:'My Schedule',icon:'<path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM5 8V6h14v2H5zm2 4h10v2H7zm0 4h7v2H7z" fill="currentColor"/>'},
   {id:'schedrequest',label:'Request Schedule',icon:'<path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" fill="currentColor"/>'},
+  {id:'tripping',label:'Tripping',icon:'<path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z" fill="currentColor"/>'},
   {id:'leaves',label:'My Leaves',icon:'<path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1z" fill="currentColor"/>'},
   {id:'profile',label:'My Profile',icon:'<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="currentColor"/>'},
 ];
@@ -1369,7 +1383,7 @@ function renderModal() {
     const nonAdmin = state.people.filter(p=>p.role!=='admin');
     const selIds = t ? t.memberIds : [];
     const chips = nonAdmin.map(p=>
-      `<div class="chip chip-person tm-chip-person ${selIds.includes(p.id)?'selected':''}" id="tm-chip-${p.id}" onclick="toggleTeamChip(${p.id})" title="${esc(p.dept)}">${esc(p.name.split(' ')[0])} <span style="opacity:.6;font-size:10px;">${p.role==='intern'?'(I)':'(E)'}</span></div>`
+      `<div class="chip tm-chip-person ${selIds.includes(p.id)?'selected':''}" id="tm-chip-${p.id}" onclick="toggleTeamChip(${p.id})" title="${esc(p.dept)}">${esc(p.name.split(' ')[0])} <span style="opacity:.6;font-size:10px;">${p.role==='intern'?'(I)':'(E)'}</span></div>`
     ).join('');
     const colors = ['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#0891b2','#be185d'];
     return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
@@ -1377,7 +1391,7 @@ function renderModal() {
       <div class="form-group"><label class="form-label">Team name</label><input id="tm-name" class="form-input" placeholder="e.g. Frontend, Design" value="${t?esc(t.name):''}"></div>
       <div class="form-group"><label class="form-label">Color</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
-          ${colors.map(c=>`<div onclick="selectTeamColor(this,'${c}')" class="color-swatch" style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;${t&&t.color===c?'outline:3px solid '+c+';outline-offset:2px':''}"></div>`).join('')}
+          ${colors.map(c=>`<div onclick="document.getElementById('tm-color').value='${c}';document.querySelectorAll('.color-swatch').forEach(x=>x.style.outline='none');this.style.outline='3px solid '+this.style.background+';outline-offset:2px'" class="color-swatch" style="width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;${t&&t.color===c?'outline:3px solid '+c+';outline-offset:2px':''}"></div>`).join('')}
         </div>
         <input type="hidden" id="tm-color" value="${t?t.color:colors[0]}">
       </div>
@@ -1388,6 +1402,71 @@ function renderModal() {
       <div class="modal-footer">
         <button class="btn btn-primary" style="flex:1" onclick="saveTeamModal()">${t?'Save changes':'Create team'}</button>
         ${t?`<button class="btn btn-danger" onclick="deleteTeam(${t.id})">Delete</button>`:''}
+        <button class="btn" onclick="closeModal()">Cancel</button>
+      </div>
+    </div></div>`;
+  }
+
+  if (state.modal==='tripping') {
+    const t = state.editTrippingId ? state.trippings.find(x=>x.id===state.editTrippingId) : null;
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:440px;">
+      <div class="modal-header"><div class="modal-title">🚗 ${t?'Edit Trip':'Create Trip'}</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      <div class="form-group"><label class="form-label">Trip title</label><input id="tr-title" class="form-input" placeholder="e.g. Client Visit – Makati" value="${t?esc(t.title):''}"></div>
+      <div class="form-group"><label class="form-label">Destination</label><input id="tr-dest" class="form-input" placeholder="e.g. Makati City Hall" value="${t?esc(t.destination):''}"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Date</label><input type="date" id="tr-date" class="form-input" value="${t?t.date:''}"></div>
+        <div class="form-group"><label class="form-label">Time</label><input type="time" id="tr-time" class="form-input" value="${t?t.time:''}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Car / Vehicle type</label><input id="tr-car" class="form-input" placeholder="e.g. Van, SUV, Sedan" value="${t?esc(t.carType):''}"></div>
+        <div class="form-group"><label class="form-label">Total seats</label><input type="number" id="tr-seats" class="form-input" min="1" max="50" placeholder="e.g. 7" value="${t?t.seats:''}"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Status</label>
+        <select id="tr-status" class="form-input">
+          <option value="open" ${!t||t.status==='open'?'selected':''}>Open</option>
+          <option value="full" ${t&&t.status==='full'?'selected':''}>Full</option>
+          <option value="closed" ${t&&t.status==='closed'?'selected':''}>Closed</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Notes (optional)</label><textarea id="tr-note" class="form-input" rows="2" style="resize:vertical;" placeholder="Details, meeting notes, reminders…">${t?esc(t.note):''}</textarea></div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" style="flex:1" onclick="saveTrippingModal()">${t?'Save changes':'Create trip'}</button>
+        ${t?`<button class="btn btn-danger" onclick="deleteTripping(${t.id})">Delete</button>`:''}
+        <button class="btn" onclick="closeModal()">Cancel</button>
+      </div>
+    </div></div>`;
+  }
+
+  if (state.modal==='apply_tripping') {
+    const trip = state.trippings.find(t=>t.id===state._applyTrippingId);
+    const clients = state._applyClients||[''];
+    const filled = trip ? trip.applicants.reduce((s,a)=>s+1+(a.clients||[]).length,0) : 0;
+    const remaining = trip ? trip.seats - filled : 0;
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal" style="max-width:400px;">
+      <div class="modal-header"><div class="modal-title">🚗 Apply for Trip</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
+      ${trip?`<div style="background:var(--blue-light);border:1px solid var(--blue-mid);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:var(--blue);margin-bottom:14px;">
+        <strong>${esc(trip.title)}</strong><br>
+        <span style="font-size:12px;">📍 ${esc(trip.destination||'—')} &nbsp;·&nbsp; ${remaining} seat${remaining!==1?'s':''} available</span>
+      </div>`:''}
+      <div class="form-group">
+        <label class="form-label">Your name</label>
+        <input class="form-input" value="${esc(state.user?.name||'')}" disabled style="opacity:.7;">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">1 seat will be reserved for you</div>
+      </div>
+      <div class="form-group">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <label class="form-label" style="margin:0;">Clients bringing along <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+          <button class="btn btn-sm" onclick="addTripClientField()" ${clients.length>=remaining-1?'disabled':''}>+ Add</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Each client takes 1 seat. Leave blank to bring none.</div>
+        ${clients.map((c,i)=>`
+          <div style="display:flex;gap:6px;margin-bottom:6px;">
+            <input class="form-input trip-client-input" placeholder="Client name" value="${esc(c)}" style="flex:1;">
+            ${clients.length>1?`<button class="btn btn-danger btn-sm" onclick="removeTripClientField(${i})">✕</button>`:''}
+          </div>`).join('')}
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" style="flex:1" onclick="saveApplyTripping()">✓ Confirm Application</button>
         <button class="btn" onclick="closeModal()">Cancel</button>
       </div>
     </div></div>`;
@@ -1524,27 +1603,87 @@ function adminDashboard() {
 
 function adminScanPage() {
   const nonAdmin = state.people.filter(p=>p.role!=='admin');
-  return `<div class="card" style="text-align:center;">
-    <div class="card-title" style="margin-bottom:8px;">QR Scanner — Admin</div>
-    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">Simulate scanning an employee or intern QR code</div>
-    <div class="qr-box" id="qr-box" onclick="adminScan();this.classList.add('scanning');setTimeout(()=>this.classList.remove('scanning'),600)">
-      <svg width="56" height="56" viewBox="0 0 80 80" fill="none">
-        <rect x="4" y="4" width="30" height="30" rx="3" stroke="var(--blue)" stroke-width="3"/><rect x="12" y="12" width="14" height="14" rx="1" fill="var(--blue)"/>
-        <rect x="46" y="4" width="30" height="30" rx="3" stroke="var(--blue)" stroke-width="3"/><rect x="54" y="12" width="14" height="14" rx="1" fill="var(--blue)"/>
-        <rect x="4" y="46" width="30" height="30" rx="3" stroke="var(--blue)" stroke-width="3"/><rect x="12" y="54" width="14" height="14" rx="1" fill="var(--blue)"/>
-        <rect x="46" y="46" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="58" y="46" width="6" height="6" rx="1" fill="var(--blue)"/>
-        <rect x="46" y="58" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="58" y="58" width="6" height="6" rx="1" fill="var(--blue)"/>
-        <rect x="70" y="46" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="70" y="58" width="6" height="6" rx="1" fill="var(--blue)"/>
-        <rect x="46" y="70" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="58" y="70" width="6" height="6" rx="1" fill="var(--blue)"/><rect x="70" y="70" width="6" height="6" rx="1" fill="var(--blue)"/>
-      </svg>
-      <div style="font-size:12px;color:var(--blue);">Click to scan</div>
+  const selectedPid = state._adminScanPid || null;
+  const selPerson = selectedPid ? nonAdmin.find(p=>p.id===selectedPid) : null;
+  const log = selectedPid ? todayLog(selectedPid) : null;
+  const inn = log?.in||''; const out = log?.out||'';
+  const lunchOut = log?.lunchOut||''; const lunchIn = log?.lunchIn||'';
+  const hrs = ch(inn, out, lunchOut, lunchIn);
+  const lm = lunchDur(lunchOut, lunchIn);
+  const done = !!(inn && out);
+
+  let action='', btnLabel='', btnClass='', statusMsg='', icon='';
+  if (selPerson) {
+    if (!inn) { action='in'; btnLabel='Check In 📸'; btnClass='btn-success'; icon='👋'; statusMsg=`Ready to clock in`; }
+    else if (inn && !lunchOut && !out) { action='lunch_out'; btnLabel='Start Lunch Break'; btnClass='btn-warning'; icon='🍽'; statusMsg=`Checked in at ${ft(inn)}`; }
+    else if (inn && lunchOut && !lunchIn && !out) { action='lunch_in'; btnLabel='Back from Lunch'; btnClass='btn-primary'; icon='↩'; statusMsg=`On lunch since ${ft(lunchOut)}`; }
+    else if (inn && lunchIn && !out) { action='out'; btnLabel='Check Out'; btnClass='btn-danger'; icon='👋'; statusMsg=`Back from lunch at ${ft(lunchIn)}`; }
+    else { action='done'; icon='✅'; statusMsg='Completed for today'; }
+  }
+
+  return `
+  <div class="card" style="max-width:500px;margin:0 auto 16px;">
+    <div class="card-title" style="margin-bottom:14px;">📋 Admin Check-In</div>
+    <div class="form-group">
+      <label class="form-label">Select person</label>
+      <select class="form-input" onchange="setState({_adminScanPid:this.value?parseInt(this.value):null})">
+        <option value="">— choose staff —</option>
+        ${nonAdmin.map(p=>`<option value="${p.id}" ${selectedPid===p.id?'selected':''}>${esc(p.name)} (${p.role})</option>`).join('')}
+      </select>
     </div>
-    <div style="font-size:11px;color:var(--text-muted);margin-bottom:16px;">Cycles through: ${nonAdmin.map(p=>esc(p.name)).join(' → ')}</div>
+    ${selPerson ? `
+    <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px;">
+      <div style="text-align:center;padding:8px 0 16px;">
+        ${avatarHTML(selPerson,'av-lg')}
+        <div style="font-size:18px;font-weight:600;margin-top:10px;">${esc(selPerson.name)}</div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:3px;">${esc(selPerson.dept)} · <span class="badge badge-${selPerson.role}">${selPerson.role}</span></div>
+      </div>
+      <div style="background:var(--bg);border-radius:var(--radius);padding:14px;text-align:center;margin-bottom:16px;">
+        <div style="font-size:24px;margin-bottom:6px;">${icon}</div>
+        <div style="font-size:14px;font-weight:500;">${esc(statusMsg)}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${TODAY}</div>
+      </div>
+      ${done ? `<div style="text-align:center;"><span class="hpill hpill-done" style="font-size:13px;padding:5px 16px;">${fh(hrs)} logged today</span></div>` :
+        `<button class="btn ${btnClass} btn-lg btn-full" style="font-size:14px;padding:12px;" onclick="adminCheckin(${selectedPid},'${action}')">${btnLabel}</button>
+         ${action==='in'?'<div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:6px;">📸 A photo is required to check in</div>':''}`
+      }
+      ${inn ? `
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;text-align:center;">
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 4px;">
+          <div style="font-size:9px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">In</div>
+          <div style="font-size:12px;font-weight:600;color:var(--green);">${ft(inn)}</div>
+        </div>
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 4px;">
+          <div style="font-size:9px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Lunch</div>
+          <div style="font-size:12px;font-weight:600;color:var(--amber);">${lunchOut?ft(lunchOut):'—'}</div>
+        </div>
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 4px;">
+          <div style="font-size:9px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Back</div>
+          <div style="font-size:12px;font-weight:600;color:var(--amber);">${lunchIn?ft(lunchIn)+(lm?` (${lm}m)`:''):'—'}</div>
+        </div>
+        <div style="background:var(--bg);border-radius:var(--radius-sm);padding:8px 4px;">
+          <div style="font-size:9px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;">Out</div>
+          <div style="font-size:12px;font-weight:600;color:var(--red);">${out?ft(out):'—'}</div>
+        </div>
+      </div>
+      ${hrs!==null?`<div style="text-align:center;margin-top:10px;font-size:12px;color:var(--text-secondary);">Net hours: <strong>${fh(hrs)}</strong>${lm?` · Lunch: ${lm}m`:''}</div>`:''}
+      ` : ''}
+    </div>` : ''}
   </div>
-  <div class="card">
-    <div class="card-header"><div class="card-title">Manual entry</div><button class="btn btn-success btn-sm" onclick="openModal('log')">+ Add entry</button></div>
+  <div class="card" style="max-width:500px;margin:0 auto;">
+    <div class="card-header"><div class="card-title">Manual Entry</div><button class="btn btn-success btn-sm" onclick="openModal('log')">+ Add entry</button></div>
     <div class="text-sm text-secondary">Use the Time Logs tab for full management, filtering, and bulk export.</div>
   </div>`;
+}
+
+async function adminCheckin(pid, action) {
+  if (action === 'in') {
+    // Needs photo — open same checkin_photo modal, set pending pid
+    setState({ modal: 'checkin_photo', _pendingCheckinPid: pid });
+  } else {
+    // Other actions don't require photo
+    await quickScan(pid, null);
+  }
 }
 
 function adminLogs() {
@@ -2219,6 +2358,7 @@ function renderApp() {
     else if (state.navPage==='deptreport') content = adminDeptReport();
     else if (state.navPage==='schedule') content = adminSchedule();
     else if (state.navPage==='teams') content = adminTeams();
+    else if (state.navPage==='tripping') content = adminTripping();
     else if (state.navPage==='shifts') content = adminShifts();
   } else {
     if (state.navPage==='dashboard') content = memberDashboard();
@@ -2227,6 +2367,7 @@ function renderApp() {
     else if (state.navPage==='calendar') content = memberCalendar();
     else if (state.navPage==='schedule') content = memberSchedule();
     else if (state.navPage==='schedrequest') content = memberSchedRequest();
+    else if (state.navPage==='tripping') content = memberTripping();
     else if (state.navPage==='leaves') content = memberLeaves();
     else if (state.navPage==='profile') content = memberProfile();
   }
@@ -2516,12 +2657,229 @@ function memberSchedRequest() {
   </div>`;
 }
 
+// ─── Admin: Tripping Schedule ──────────────────────────────────────────────
+function adminTripping() {
+  const trips = state.trippings.sort((a,b)=>a.date.localeCompare(b.date));
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">🚗 Tripping Schedule</div><div class="card-sub">${trips.length} trip${trips.length!==1?'s':''}</div></div>
+      <button class="btn btn-success btn-sm" onclick="setState({modal:'tripping',editTrippingId:null})">+ Create trip</button>
+    </div>
+    ${trips.length===0?'<div class="empty-state">No trips scheduled. Create one for your team.</div>':''}
+    ${trips.map(t=>{
+      const filled = t.applicants.reduce((s,a)=>s+1+(a.clients||[]).length,0);
+      const pct = t.seats>0?Math.min(100,Math.round(filled/t.seats*100)):0;
+      const statusColor = t.status==='closed'?'var(--red)':t.status==='full'?'var(--amber)':'var(--green)';
+      return `<div style="border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:600;font-size:15px;margin-bottom:2px;">${esc(t.title)}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">📍 ${esc(t.destination||'—')} &nbsp;·&nbsp; 📅 ${t.date||'TBD'} ${t.time?'at '+ft(t.time):''}  &nbsp;·&nbsp; 🚗 ${esc(t.carType||'—')}</div>
+            ${t.note?`<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${esc(t.note)}</div>`:''}
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+            <span style="font-size:11px;font-weight:600;color:${statusColor};background:${t.status==='closed'?'var(--red-light)':t.status==='full'?'var(--amber-light)':'var(--green-light)'};padding:2px 8px;border-radius:99px;">${t.status==='closed'?'Closed':t.status==='full'?'Full':'Open'}</span>
+            <button class="btn btn-warning btn-sm" onclick="setState({modal:'tripping',editTrippingId:${t.id}})">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteTripping(${t.id})">Delete</button>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <div style="flex:1;height:6px;background:var(--border);border-radius:99px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${pct>=100?'var(--red)':'var(--blue)'};border-radius:99px;transition:width .3s;"></div>
+          </div>
+          <span style="font-size:12px;font-weight:600;color:var(--text-secondary);white-space:nowrap;">${filled} / ${t.seats} seats</span>
+        </div>
+        ${t.applicants.length===0?'<div style="font-size:12px;color:var(--text-muted);">No applicants yet.</div>':''}
+        ${t.applicants.map((a,ai)=>{
+          const p = state.people.find(x=>x.id===a.personId);
+          return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;background:var(--bg);">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                ${p?avatarHTML(p,'av-xs'):''}
+                <span style="font-size:13px;font-weight:500;">${p?esc(p.name):esc(a.personName||'Unknown')}</span>
+                ${a.clients&&a.clients.length?`<span class="badge badge-employee">+${a.clients.length} client${a.clients.length>1?'s':''}</span>`:''}
+              </div>
+              <button class="btn btn-danger btn-sm" onclick="removeTrippingApplicant(${t.id},${ai})">Remove</button>
+            </div>
+            ${a.clients&&a.clients.length?`<div style="margin-top:6px;padding-left:4px;">${a.clients.map(c=>`<div style="font-size:11px;color:var(--text-secondary);">👤 ${esc(c)}</div>`).join('')}</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── Member: Tripping page ────────────────────────────────────────────────
+function memberTripping() {
+  const u = state.user;
+  const trips = state.trippings.filter(t=>t.status!=='closed').sort((a,b)=>a.date.localeCompare(b.date));
+  const allTrips = state.trippings.sort((a,b)=>a.date.localeCompare(b.date));
+  const myApps = allTrips.filter(t=>t.applicants.some(a=>a.personId===u.id));
+  return `<div class="card">
+    <div class="card-header">
+      <div><div class="card-title">🚗 Tripping Schedule</div><div class="card-sub">Available trips you can join</div></div>
+    </div>
+    ${trips.length===0?'<div class="empty-state">No open trips available right now.</div>':''}
+    ${trips.map(t=>{
+      const filled = t.applicants.reduce((s,a)=>s+1+(a.clients||[]).length,0);
+      const remaining = t.seats - filled;
+      const hasApplied = t.applicants.some(a=>a.personId===u.id);
+      const isFull = remaining <= 0;
+      return `<div style="border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;${hasApplied?'border-left:4px solid var(--green);':''}">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+          <div>
+            <div style="font-weight:600;font-size:15px;">${esc(t.title)}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:3px;">📍 ${esc(t.destination||'—')} &nbsp;·&nbsp; 📅 ${t.date||'TBD'} ${t.time?'at '+ft(t.time):''}</div>
+            <div style="font-size:12px;color:var(--text-secondary);">🚗 ${esc(t.carType||'—')} &nbsp;·&nbsp; ${remaining>0?`<span style="color:var(--green);font-weight:500;">${remaining} seat${remaining!==1?'s':''} left</span>`:'<span style="color:var(--red);font-weight:500;">No seats left</span>'}</div>
+            ${t.note?`<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${esc(t.note)}</div>`:''}
+          </div>
+          <div>
+            ${hasApplied
+              ? `<span class="badge badge-approved" style="font-size:12px;padding:4px 10px;">✓ Applied</span>`
+              : isFull
+                ? `<span class="badge badge-absent" style="font-size:12px;padding:4px 10px;">Full</span>`
+                : `<button class="btn btn-success btn-sm" onclick="openApplyTripping(${t.id})">Apply</button>`
+            }
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;height:5px;background:var(--border);border-radius:99px;overflow:hidden;">
+            <div style="height:100%;width:${Math.min(100,Math.round(filled/t.seats*100))}%;background:${filled>=t.seats?'var(--red)':'var(--blue)'};border-radius:99px;"></div>
+          </div>
+          <span style="font-size:11px;color:var(--text-secondary);">${filled}/${t.seats}</span>
+        </div>
+        ${t.applicants.length?`<div style="margin-top:10px;"><div style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Applicants</div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;">
+            ${t.applicants.map(a=>{
+              const p = state.people.find(x=>x.id===a.personId);
+              return `<div style="display:flex;align-items:center;gap:4px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;">
+                ${p?avatarHTML(p,'av-xs'):''}
+                <span>${p?esc(p.name.split(' ')[0]):esc(a.personName||'?')}</span>
+                ${a.clients&&a.clients.length?`<span style="color:var(--text-muted);">+${a.clients.length}👤</span>`:''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`:''}
+      </div>`;
+    }).join('')}
+    ${myApps.length?`<div style="margin-top:4px;"><div class="card-title" style="margin-bottom:10px;">My Applications</div>
+      ${myApps.map(t=>{
+        const myApp = t.applicants.find(a=>a.personId===u.id);
+        return `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13px;font-weight:500;">${esc(t.title)}</div>
+            <div style="font-size:11px;color:var(--text-secondary);">${t.date||'TBD'} · ${esc(t.destination||'—')}</div>
+            ${myApp?.clients?.length?`<div style="font-size:11px;color:var(--text-muted);">Clients: ${myApp.clients.map(c=>esc(c)).join(', ')}</div>`:''}
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span class="badge badge-${t.status==='closed'?'rejected':'approved'}">${t.status==='closed'?'Closed':'Active'}</span>
+            ${t.status!=='closed'?`<button class="btn btn-danger btn-sm" onclick="cancelTrippingApplication(${t.id})">Cancel</button>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`:''}
+  </div>`;
+}
+
+function openApplyTripping(tripId) {
+  setState({ modal: 'apply_tripping', _applyTrippingId: tripId, _applyClients: [''] });
+}
+
+async function saveApplyTripping() {
+  const u = state.user;
+  const tripId = state._applyTrippingId;
+  const trip = state.trippings.find(t=>t.id===tripId);
+  if (!trip) return;
+  const clientInputs = document.querySelectorAll('.trip-client-input');
+  const clients = Array.from(clientInputs).map(i=>i.value.trim()).filter(Boolean);
+  const filled = trip.applicants.reduce((s,a)=>s+1+(a.clients||[]).length, 0);
+  const wouldTake = 1 + clients.length;
+  if (filled + wouldTake > trip.seats) { showToast(`Only ${trip.seats - filled} seat(s) left`); return; }
+  const newApplicant = { personId: u.id, personName: u.name, clients };
+  const newApplicants = [...trip.applicants, newApplicant];
+  const newFilled = newApplicants.reduce((s,a)=>s+1+(a.clients||[]).length,0);
+  const newStatus = newFilled >= trip.seats ? 'full' : 'open';
+  const { error } = await sb.from('trippings').update({ applicants: JSON.stringify(newApplicants), status: newStatus }).eq('id', tripId);
+  if (error) { showToast('DB error: '+error.message); return; }
+  setState({ trippings: state.trippings.map(t=>t.id===tripId?{...t,applicants:newApplicants,status:newStatus}:t), modal:null, _applyTrippingId:null, _applyClients:null });
+  showToast('Applied successfully!');
+}
+
+async function cancelTrippingApplication(tripId) {
+  const u = state.user;
+  const trip = state.trippings.find(t=>t.id===tripId);
+  if (!trip) return;
+  const newApplicants = trip.applicants.filter(a=>a.personId!==u.id);
+  const filled = newApplicants.reduce((s,a)=>s+1+(a.clients||[]).length,0);
+  const newStatus = filled >= trip.seats ? 'full' : 'open';
+  const { error } = await sb.from('trippings').update({ applicants: JSON.stringify(newApplicants), status: newStatus }).eq('id', tripId);
+  if (error) { showToast('DB error: '+error.message); return; }
+  setState({ trippings: state.trippings.map(t=>t.id===tripId?{...t,applicants:newApplicants,status:newStatus}:t) });
+  showToast('Application cancelled');
+}
+
+async function removeTrippingApplicant(tripId, idx) {
+  const trip = state.trippings.find(t=>t.id===tripId);
+  if (!trip) return;
+  const newApplicants = trip.applicants.filter((_,i)=>i!==idx);
+  const filled = newApplicants.reduce((s,a)=>s+1+(a.clients||[]).length,0);
+  const newStatus = filled >= trip.seats ? 'full' : 'open';
+  const { error } = await sb.from('trippings').update({ applicants: JSON.stringify(newApplicants), status: newStatus }).eq('id', tripId);
+  if (error) { showToast('DB error: '+error.message); return; }
+  setState({ trippings: state.trippings.map(t=>t.id===tripId?{...t,applicants:newApplicants,status:newStatus}:t) });
+  showToast('Removed');
+}
+
+async function saveTrippingModal() {
+  const title = document.getElementById('tr-title')?.value.trim();
+  const destination = document.getElementById('tr-dest')?.value.trim();
+  const date = document.getElementById('tr-date')?.value;
+  const time = document.getElementById('tr-time')?.value;
+  const carType = document.getElementById('tr-car')?.value.trim();
+  const seats = parseInt(document.getElementById('tr-seats')?.value)||0;
+  const note = document.getElementById('tr-note')?.value.trim();
+  const status = document.getElementById('tr-status')?.value||'open';
+  if (!title) { showToast('Title required'); return; }
+  if (!seats || seats < 1) { showToast('Seats must be at least 1'); return; }
+  const payload = { title, destination, date, time, car_type: carType, seats, note, status };
+  if (state.editTrippingId) {
+    const trip = state.trippings.find(t=>t.id===state.editTrippingId);
+    const { error } = await sb.from('trippings').update(payload).eq('id', state.editTrippingId);
+    if (error) { showToast('DB error: '+error.message); return; }
+    setState({ trippings: state.trippings.map(t=>t.id===state.editTrippingId?{...t,...payload,carType,applicants:trip.applicants}:t), modal:null, editTrippingId:null });
+    showToast('Trip updated');
+  } else {
+    const insertPayload = { ...payload, applicants: JSON.stringify([]) };
+    const { data, error } = await sb.from('trippings').insert(insertPayload).select().single();
+    if (error) { showToast('DB error: '+error.message); return; }
+    setState({ trippings: [...state.trippings, dbTrippingToApp(data)], modal:null });
+    showToast('Trip created');
+  }
+}
+
+async function deleteTripping(id) {
+  if (!confirm('Delete this trip?')) return;
+  const { error } = await sb.from('trippings').delete().eq('id', id);
+  if (error) { showToast('DB error: '+error.message); return; }
+  setState({ trippings: state.trippings.filter(t=>t.id!==id), modal:null, editTrippingId:null });
+  showToast('Trip deleted');
+}
+
+function addTripClientField() {
+  setState({ _applyClients: [...(state._applyClients||['']), ''] });
+}
+function removeTripClientField(i) {
+  const arr = [...(state._applyClients||[])];
+  arr.splice(i, 1);
+  setState({ _applyClients: arr.length ? arr : [''] });
+}
+
 bootstrap();
 
 // ─── Expose functions to window for inline onclick handlers ───────────────
 Object.assign(window, {
   setState, doLogin, doLogout,
-  quickScan, adminScan,
+  quickScan, adminScan, adminCheckin,
   openModal, closeModal,
   saveLogModal, deleteLog,
   savePersonModal, saveEditPersonModal, removePerson,
@@ -2535,6 +2893,10 @@ Object.assign(window, {
   saveTeamModal, deleteTeam, toggleTeamChip, selectTeamColor,
   prevWeek, nextWeek,
   startCamera, capturePhoto, retakePhoto, handleCheckinUpload, submitCheckinPhoto, closeCheckinModal,
+  // Tripping
+  saveTrippingModal, deleteTripping, removeTrippingApplicant,
+  openApplyTripping, saveApplyTripping, cancelTrippingApplication,
+  addTripClientField, removeTripClientField,
 });
 </script>
 </body>

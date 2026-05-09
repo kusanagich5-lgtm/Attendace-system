@@ -795,14 +795,24 @@ async function deleteSched() {
   setState({schedules, modal: null, editSchedId: null}); showToast('Entry deleted');
 }
 
+function parseDateLocal(ds) {
+  // Parse YYYY-MM-DD as local time (not UTC) to avoid off-by-one day issues
+  const [y,m,d] = ds.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+
 function schedForDate(ds, personId) {
   return state.schedules.filter(s => {
     const ids = s.personIds || [];
     const matchPerson = ids.includes('all') || (personId === null) || ids.includes(personId);
     if (!matchPerson) return false;
     if (s.repeat === 'none' || !s.repeat) return s.date === ds;
-    const base = new Date(s.date); const target = new Date(ds);
+    const base = parseDateLocal(s.date);
+    const target = parseDateLocal(ds);
     if (target < base) return false;
+    // Cap repeating entries to 1 year from base date
+    const maxDate = new Date(base); maxDate.setFullYear(maxDate.getFullYear() + 1);
+    if (target > maxDate) return false;
     if (s.repeat === 'weekly') return base.getDay() === target.getDay();
     if (s.repeat === 'daily') { const d = target.getDay(); return d >= 1 && d <= 5; }
     return false;
@@ -1426,11 +1436,11 @@ function renderModal() {
         <div><div style="font-weight:600;">${esc(p.name)}</div><div style="font-size:12px;color:var(--text-secondary);">${req.note||'No notes'}</div></div>
       </div>
       <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
-        ${entries.length} day${entries.length!==1?'s':''} will be added as weekly recurring shifts
+        ${entries.length} day${entries.length!==1?'s':''} will be added as one-time shifts for next week
       </div>
       ${entryRows}
       <div style="font-size:12px;color:var(--text-secondary);margin:12px 0 16px;padding:10px 12px;background:var(--blue-light);border-radius:var(--radius-sm);border:1px solid var(--blue-mid);">
-        💡 Each entry will be set to <strong>weekly repeat</strong>, starting next week. You can edit any entry afterwards from the Schedule page.
+        💡 Each entry will be added as a <strong>one-time shift for next week only</strong>. You can edit or copy entries from the Schedule page afterwards.
       </div>
       <div class="modal-footer">
         ${entries.length?`<button class="btn btn-primary" style="flex:1" onclick="addAllSchedFromReq(${reqId})">✓ Add all ${entries.length} entr${entries.length===1?'y':'ies'}</button>`:''}
@@ -2390,7 +2400,7 @@ async function addAllSchedFromReq(reqId) {
       location: e.location,
       person_ids: JSON.stringify([req.personId]),
       date,
-      repeat: 'weekly',
+      repeat: 'none',
       start_time: e.startTime,
       end_time: e.endTime,
       note: req.note||''

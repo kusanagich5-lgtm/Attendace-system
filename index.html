@@ -285,20 +285,39 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
 .demo-box strong { color: var(--text); font-weight: 500; }
 
 /* Mobile bottom nav */
-.mobile-nav { display:none; position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); z-index:200; padding:6px 0 env(safe-area-inset-bottom,0); }
+.mobile-nav { display:none; position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); z-index:200; padding:4px 0 env(safe-area-inset-bottom,0); }
 .mobile-nav-inner { display:flex; justify-content:space-around; }
-.mobile-nav-item { display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 8px; cursor:pointer; color:var(--text-muted); min-width:52px; }
+.mobile-nav-item { display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 4px; cursor:pointer; color:var(--text-muted); min-width:0; flex:1; -webkit-tap-highlight-color:transparent; }
 .mobile-nav-item.active { color:var(--blue); }
-.mobile-nav-item svg { width:20px; height:20px; }
-.mobile-nav-item span { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
-.mobile-more-panel { display:none; position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-top:1px solid var(--border); border-radius:16px 16px 0 0; z-index:300; padding:12px 0 env(safe-area-inset-bottom,0); max-height:60vh; overflow-y:auto; }
-.mobile-more-panel.open { display:block; }
-.mobile-more-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:299; }
-.mobile-more-overlay.open { display:block; }
-.mobile-more-item { display:flex; align-items:center; gap:12px; padding:13px 20px; font-size:14px; color:var(--text); cursor:pointer; }
-.mobile-more-item.active { color:var(--blue); font-weight:500; }
-.mobile-more-item svg { width:18px; height:18px; }
-.mobile-more-handle { width:36px; height:4px; background:var(--border); border-radius:99px; margin:0 auto 12px; }
+.mobile-nav-item svg { width:22px; height:22px; }
+.mobile-nav-item span { font-size:9px; font-weight:600; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+
+/* Swipeable nav drawer */
+.nav-drawer-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:299; opacity:0; transition:opacity .25s; }
+.nav-drawer-overlay.open { display:block; opacity:1; }
+.nav-drawer { position:fixed; bottom:0; left:0; right:0; background:var(--surface); border-radius:20px 20px 0 0; z-index:300; padding-bottom:env(safe-area-inset-bottom,0); transform:translateY(100%); transition:transform .3s cubic-bezier(.4,0,.2,1); max-height:85vh; display:flex; flex-direction:column; }
+.nav-drawer.open { transform:translateY(0); }
+.nav-drawer-handle-wrap { padding:12px 0 4px; display:flex; justify-content:center; flex-shrink:0; cursor:grab; }
+.nav-drawer-handle { width:40px; height:4px; background:var(--border); border-radius:99px; }
+.nav-drawer-title { font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:.08em; padding:2px 20px 10px; flex-shrink:0; }
+.nav-drawer-items { overflow-y:auto; flex:1; padding-bottom:8px; }
+.nav-drawer-item { display:flex; align-items:center; gap:16px; padding:15px 24px; font-size:15px; color:var(--text); cursor:pointer; -webkit-tap-highlight-color:transparent; border-left:3px solid transparent; }
+.nav-drawer-item:active { background:var(--bg); }
+.nav-drawer-item.active { color:var(--blue); font-weight:600; border-left-color:var(--blue); background:var(--blue-light); }
+.nav-drawer-item svg { width:22px; height:22px; flex-shrink:0; }
+.nav-drawer-sep { height:1px; background:var(--border); margin:6px 20px; }
+.nav-drawer-logout { display:flex; align-items:center; gap:16px; padding:15px 24px; font-size:15px; color:var(--red); cursor:pointer; -webkit-tap-highlight-color:transparent; }
+
+/* Profile dropdown */
+.profile-btn { width:36px; height:36px; border-radius:50%; cursor:pointer; overflow:hidden; flex-shrink:0; border:2px solid var(--border); -webkit-tap-highlight-color:transparent; }
+.profile-btn:active { opacity:.8; }
+.profile-dropdown { position:absolute; top:50px; right:0; width:230px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-md); z-index:200; overflow:hidden; }
+.profile-dropdown-header { padding:14px 16px; border-bottom:1px solid var(--border); }
+.profile-dropdown-name { font-size:14px; font-weight:600; color:var(--text); }
+.profile-dropdown-sub { font-size:12px; color:var(--text-secondary); margin-top:2px; }
+.profile-dropdown-item { display:flex; align-items:center; gap:10px; padding:11px 16px; font-size:13px; color:var(--text); cursor:pointer; }
+.profile-dropdown-item:hover { background:var(--bg); }
+.profile-dropdown-item.danger { color:var(--red); }
 
 @media(max-width:768px){
   .stats-grid-4{grid-template-columns:repeat(2,1fr);}
@@ -307,6 +326,8 @@ input, select, textarea { font-family: inherit; font-size: 13px; }
   .main{padding:16px 12px 80px;}
   .mobile-nav{display:block;}
   .topbar{padding:0 14px;}
+  .topbar .user-info{display:none;}
+  .topbar .notif-btn-wrap{display:none;}
   .sched-week{grid-template-columns:repeat(7,1fr);font-size:10px;}
   .filter-bar{flex-direction:column;align-items:stretch;}
   .filter-bar .form-input{min-width:unset;width:100%;}
@@ -420,6 +441,7 @@ let state = {
   _loading: false,
   _error: null,
   moreOpen: false,
+  profileOpen: false,
   editTeamId: null,
   editTrippingId: null,
   _adminScanPid: null,
@@ -1079,6 +1101,9 @@ function renderLogin() {
 function renderTopbar() {
   const u = state.user;
   const notifs = getNotifications();
+  const avatarEl = u.photo
+    ? `<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover;">`
+    : `<div style="width:100%;height:100%;background:${avColor(u.role)};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;">${gi(u.name)}</div>`;
   return `<div class="topbar">
     <div class="topbar-brand">
       <div class="brand-icon">
@@ -1087,19 +1112,34 @@ function renderTopbar() {
       <span class="brand-name">Attendance</span>
     </div>
     <div class="topbar-right">
-      ${u.role==='admin'?`<div style="position:relative;">
-        <button class="notif-btn" onclick="setState({notifOpen:!state.notifOpen})" title="Notifications">
+      ${u.role==='admin'?`<div class="notif-btn-wrap" style="position:relative;">
+        <button class="notif-btn" onclick="setState({notifOpen:!state.notifOpen,profileOpen:false})" title="Notifications">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor" opacity=".7"/></svg>
           ${notifs.length?'<div class="notif-dot"></div>':''}
         </button>
         ${state.notifOpen?renderNotifPanel(notifs):''}
       </div>`:''}
-      ${avatarHTML(u,'av-sm')}
-      <div class="user-info">
+      <div class="user-info" style="text-align:right;">
         <div class="name">${esc(u.name)}</div>
         <div class="sub">${u.role} · ${esc(u.dept)}</div>
       </div>
-      <button class="btn btn-danger btn-sm" onclick="doLogout()">Logout</button>
+      <div style="position:relative;">
+        <div class="profile-btn" onclick="setState({profileOpen:!state.profileOpen,notifOpen:false})" title="Account">${avatarEl}</div>
+        ${state.profileOpen?`<div class="profile-dropdown">
+          <div class="profile-dropdown-header">
+            <div class="profile-dropdown-name">${esc(u.name)}</div>
+            <div class="profile-dropdown-sub">${u.role} · ${esc(u.dept)}</div>
+          </div>
+          ${u.role!=='admin'?`<div class="profile-dropdown-item" onclick="setState({navPage:'profile',profileOpen:false,moreOpen:false})">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="currentColor"/></svg>
+            My Profile
+          </div>`:''}
+          <div class="profile-dropdown-item danger" onclick="doLogout()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" fill="currentColor"/></svg>
+            Log out
+          </div>
+        </div>`:''}
+      </div>
     </div>
   </div>`;
 }
@@ -1145,32 +1185,39 @@ const memberNav = [
 ];
 
 function renderMobileNav(nav) {
-  // Show first 4 nav items + "More" button
+  // Show first 4 in bottom bar, rest accessible via swipe-up drawer
   const primary = nav.slice(0, 4);
-  const overflow = nav.slice(4);
+  const hasActive = nav.some(n=>n.id===state.navPage);
+  const activeInPrimary = primary.some(n=>n.id===state.navPage);
   return `
-  <div class="mobile-more-overlay ${state.moreOpen?'open':''}" onclick="setState({moreOpen:false})"></div>
-  <div class="mobile-more-panel ${state.moreOpen?'open':''}">
-    <div class="mobile-more-handle"></div>
-    ${overflow.map(n=>`<div class="mobile-more-item ${state.navPage===n.id?'active':''}" onclick="setState({navPage:'${n.id}',notifOpen:false,moreOpen:false})">
-      <svg viewBox="0 0 24 24" fill="none">${n.icon}</svg>
-      ${n.label}
-    </div>`).join('')}
-    <div class="mobile-more-item" onclick="doLogout()" style="color:var(--red);">
-      <svg viewBox="0 0 24 24" fill="none"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" fill="currentColor"/></svg>
-      Logout
+  <div class="nav-drawer-overlay ${state.moreOpen?'open':''}" onclick="setState({moreOpen:false})"></div>
+  <div class="nav-drawer ${state.moreOpen?'open':''}" id="nav-drawer">
+    <div class="nav-drawer-handle-wrap" id="nav-drawer-handle">
+      <div class="nav-drawer-handle"></div>
+    </div>
+    <div class="nav-drawer-title">Navigation</div>
+    <div class="nav-drawer-items">
+      ${nav.map(n=>`<div class="nav-drawer-item ${state.navPage===n.id?'active':''}" onclick="setState({navPage:'${n.id}',notifOpen:false,moreOpen:false,profileOpen:false})">
+        <svg viewBox="0 0 24 24" fill="none">${n.icon}</svg>
+        ${n.label}
+      </div>`).join('')}
+      <div class="nav-drawer-sep"></div>
+      <div class="nav-drawer-logout" onclick="doLogout()">
+        <svg viewBox="0 0 24 24" fill="none" style="width:22px;height:22px;"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" fill="currentColor"/></svg>
+        Log out
+      </div>
     </div>
   </div>
   <nav class="mobile-nav">
     <div class="mobile-nav-inner">
-      ${primary.map(n=>`<div class="mobile-nav-item ${state.navPage===n.id?'active':''}" onclick="setState({navPage:'${n.id}',notifOpen:false,moreOpen:false})">
+      ${primary.map(n=>`<div class="mobile-nav-item ${state.navPage===n.id?'active':''}" onclick="setState({navPage:'${n.id}',notifOpen:false,moreOpen:false,profileOpen:false})">
         <svg viewBox="0 0 24 24" fill="none">${n.icon}</svg>
         <span>${n.label.split(' ')[0]}</span>
       </div>`).join('')}
-      ${overflow.length?`<div class="mobile-nav-item ${overflow.some(n=>n.id===state.navPage)?'active':''}" onclick="setState({moreOpen:!state.moreOpen})">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" fill="currentColor"/></svg>
-        <span>More</span>
-      </div>`:''}
+      <div class="mobile-nav-item ${!activeInPrimary&&hasActive?'active':''}" onclick="setState({moreOpen:true,profileOpen:false})">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z" fill="currentColor"/></svg>
+        <span>Menu</span>
+      </div>
     </div>
   </nav>`;
 }
@@ -2372,7 +2419,7 @@ function renderApp() {
     else if (state.navPage==='profile') content = memberProfile();
   }
 
-  return `<div id="app-inner">
+  return `<div id="app-inner" onclick="handleAppClick(event)">
     ${renderTopbar()}
     <div class="layout">
       <div class="sidenav">
@@ -2393,6 +2440,40 @@ function render() {
     return;
   }
   document.getElementById('app').innerHTML = state.screen==='login' ? renderLogin() : renderApp();
+  // Attach swipe-to-close on nav drawer
+  requestAnimationFrame(() => {
+    const drawer = document.getElementById('nav-drawer');
+    const handle = document.getElementById('nav-drawer-handle');
+    if (!drawer) return;
+    let startY = 0, currentY = 0, dragging = false;
+    const onTouchStart = e => { startY = e.touches[0].clientY; dragging = true; drawer.style.transition = 'none'; };
+    const onTouchMove = e => {
+      if (!dragging) return;
+      currentY = e.touches[0].clientY;
+      const dy = Math.max(0, currentY - startY);
+      drawer.style.transform = `translateY(${dy}px)`;
+    };
+    const onTouchEnd = () => {
+      dragging = false;
+      drawer.style.transition = '';
+      drawer.style.transform = '';
+      if (currentY - startY > 80) setState({moreOpen: false});
+    };
+    drawer.addEventListener('touchstart', onTouchStart, {passive:true});
+    drawer.addEventListener('touchmove', onTouchMove, {passive:true});
+    drawer.addEventListener('touchend', onTouchEnd);
+  });
+}
+
+function handleAppClick(e) {
+  // Close profile dropdown when clicking outside it
+  if (state.profileOpen && !e.target.closest('.profile-btn') && !e.target.closest('.profile-dropdown')) {
+    setState({profileOpen: false});
+  }
+  // Close notif panel when clicking outside it
+  if (state.notifOpen && !e.target.closest('.notif-btn') && !e.target.closest('.notif-panel')) {
+    setState({notifOpen: false});
+  }
 }
 
 // ─── Camera / Check-in Photo helpers ──────────────────────────────────────
@@ -2878,7 +2959,7 @@ bootstrap();
 
 // ─── Expose functions to window for inline onclick handlers ───────────────
 Object.assign(window, {
-  setState, doLogin, doLogout,
+  setState, doLogin, doLogout, handleAppClick,
   quickScan, adminScan, adminCheckin,
   openModal, closeModal,
   saveLogModal, deleteLog,

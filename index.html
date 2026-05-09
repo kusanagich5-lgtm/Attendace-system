@@ -1724,6 +1724,10 @@ function adminDeptReport() {
   </div>`;
 }
 
+function toLocalDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
 function getWeekDates(offsetWeeks) {
   const now = new Date();
   const dow = now.getDay(); // 0=Sun
@@ -1732,7 +1736,7 @@ function getWeekDates(offsetWeeks) {
   const dates = [];
   for(let i=0;i<7;i++){
     const d = new Date(monday); d.setDate(monday.getDate()+i);
-    dates.push(d.toISOString().split('T')[0]);
+    dates.push(toLocalDateStr(d));
   }
   return dates;
 }
@@ -1772,7 +1776,7 @@ function adminSchedule() {
   const upcoming = [];
   for(let i=0;i<14;i++){
     const d = new Date(); d.setDate(d.getDate()+i);
-    const ds = d.toISOString().split('T')[0];
+    const ds = toLocalDateStr(d);
     const entries = schedForDate(ds,null);
     if(entries.length) upcoming.push({ds,entries});
   }
@@ -1858,7 +1862,7 @@ function memberSchedule() {
   const upcoming = [];
   for(let i=0;i<30;i++){
     const d = new Date(); d.setDate(d.getDate()+i);
-    const ds = d.toISOString().split('T')[0];
+    const ds = toLocalDateStr(d);
     const entries = schedForDate(ds, u.id);
     if(entries.length) upcoming.push({ds,entries});
   }
@@ -2374,7 +2378,7 @@ function nextWeekday(dayNum, baseDate) {
   const d = new Date(baseDate);
   const diff = (dayNum - d.getDay() + 7) % 7;
   d.setDate(d.getDate() + diff);
-  return d.toISOString().split('T')[0];
+  return toLocalDateStr(d);
 }
 
 async function addAllSchedFromReq(reqId) {

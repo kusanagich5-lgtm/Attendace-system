@@ -1124,24 +1124,25 @@ function renderTopbar() {
         <div class="sub">${u.role} · ${esc(u.dept)}</div>
       </div>
       <div style="position:relative;">
-        <div class="profile-btn" onclick="setState({profileOpen:!state.profileOpen,notifOpen:false})" title="Account">${avatarEl}</div>
-        ${state.profileOpen?`<div class="profile-dropdown">
-          <div class="profile-dropdown-header">
-            <div class="profile-dropdown-name">${esc(u.name)}</div>
-            <div class="profile-dropdown-sub">${u.role} · ${esc(u.dept)}</div>
-          </div>
-          ${u.role!=='admin'?`<div class="profile-dropdown-item" onclick="setState({navPage:'profile',profileOpen:false,moreOpen:false})">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" fill="currentColor"/></svg>
-            My Profile
-          </div>`:''}
-          <div class="profile-dropdown-item danger" onclick="doLogout()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" fill="currentColor"/></svg>
-            Log out
-          </div>
-        </div>`:''}
+        <div class="profile-btn" onclick="toggleProfile()" title="Account">${avatarEl}</div>
       </div>
     </div>
-  </div>`;
+  </div>
+  ${state.profileOpen ? `<div class="modal-overlay" onclick="setState({profileOpen:false})" style="z-index:500;"><div class="modal" style="max-width:320px;" onclick="event.stopPropagation()">
+    <div style="text-align:center;padding:16px 0 20px;">
+      <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;margin:0 auto 12px;border:3px solid var(--border);">${avatarEl}</div>
+      <div style="font-size:18px;font-weight:700;">${esc(u.name)}</div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">${esc(u.dept)}</div>
+      <span class="badge badge-${u.role}" style="margin-top:6px;">${u.role}</span>
+    </div>
+    ${u.role!=='admin'?`<button class="btn btn-full" style="margin-bottom:8px;" onclick="setState({navPage:'profile',profileOpen:false,moreOpen:false})">
+      👤 My Profile
+    </button>`:''}
+    <button class="btn btn-danger btn-full" onclick="doLogout()">
+      🚪 Log out
+    </button>
+  </div></div>` : ''}
+  `;
 }
 
 function renderNotifPanel(notifs) {
@@ -2419,7 +2420,7 @@ function renderApp() {
     else if (state.navPage==='profile') content = memberProfile();
   }
 
-  return `<div id="app-inner" onclick="handleAppClick(event)">
+  return `<div id="app-inner">
     ${renderTopbar()}
     <div class="layout">
       <div class="sidenav">
@@ -2465,15 +2466,8 @@ function render() {
   });
 }
 
-function handleAppClick(e) {
-  // Close profile dropdown when clicking outside it
-  if (state.profileOpen && !e.target.closest('.profile-btn') && !e.target.closest('.profile-dropdown')) {
-    setState({profileOpen: false});
-  }
-  // Close notif panel when clicking outside it
-  if (state.notifOpen && !e.target.closest('.notif-btn') && !e.target.closest('.notif-panel')) {
-    setState({notifOpen: false});
-  }
+function toggleProfile() {
+  setState({ profileOpen: !state.profileOpen, notifOpen: false });
 }
 
 // ─── Camera / Check-in Photo helpers ──────────────────────────────────────
@@ -2959,7 +2953,7 @@ bootstrap();
 
 // ─── Expose functions to window for inline onclick handlers ───────────────
 Object.assign(window, {
-  setState, doLogin, doLogout, handleAppClick,
+  setState, doLogin, doLogout, toggleProfile,
   quickScan, adminScan, adminCheckin,
   openModal, closeModal,
   saveLogModal, deleteLog,

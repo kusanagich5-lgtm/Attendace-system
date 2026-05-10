@@ -1115,6 +1115,30 @@ function getFilteredLogs() {
   }).sort((a,b)=>b.date.localeCompare(a.date)||b.in.localeCompare(a.in));
 }
 
+// ─── Export wrapper functions (window-safe, no arg passing in onclick) ────
+function exportLogsCSV()    { exportCSV(logRows(getFilteredLogs()), 'logs.csv'); }
+function exportLogsXLSX()   { exportXLSX(logRows(getFilteredLogs()), 'Logs', 'logs.xlsx'); }
+function exportSummaryCSV() { exportCSV(summaryRows(), 'summary.csv'); }
+function exportSummaryXLSX(){ exportXLSX(summaryRows(), 'Summary', 'summary.xlsx'); }
+function exportDeptCSV()    { exportCSV(deptRows(), 'dept_report.csv'); }
+function exportMyLogsCSV()  { exportCSV(logRows(myLogs(state.user.id)), 'my_history.csv'); }
+function exportMyLogsXLSX() { exportXLSX(logRows(myLogs(state.user.id)), 'My History', 'my_history.xlsx'); }
+function deptRows() {
+  const ff=state.sfFrom, ft2=state.sfTo;
+  const fl = state.logs.filter(l=>(!ff||l.date>=ff)&&(!ft2||l.date<=ft2));
+  const nonAdmin = state.people.filter(p=>p.role!=='admin');
+  const depts = [...new Set(nonAdmin.map(p=>p.dept))].sort();
+  return depts.map(d=>{
+    const members = nonAdmin.filter(p=>p.dept===d);
+    const ids = members.map(p=>p.id);
+    const dLogs = fl.filter(l=>ids.includes(l.personId));
+    const tot = dLogs.reduce((s,l)=>{const h=ch(l.in,l.out,l.lunchOut,l.lunchIn);return s+(h||0);},0);
+    const days = dLogs.filter(l=>ch(l.in,l.out,l.lunchOut,l.lunchIn)!==null).length;
+    const late = dLogs.filter(l=>isLate(l.in,l.personId,l.date)).length;
+    return {dept:d, members:members.length, hours:+tot.toFixed(2), days, late, avg:members.length?+(tot/members.length).toFixed(2):0};
+  }).sort((a,b)=>b.hours-a.hours);
+}
+
 // ─── Avatar HTML ───────────────────────────────────────────────────────────
 function avatarHTML(person, size='av-sm') {
   if (person.photo) return `<div class="avatar ${size}" style="background:${avColor(person.role)};"><img src="${person.photo}" alt="${esc(person.name)}"></div>`;
@@ -1822,8 +1846,8 @@ function adminLogs() {
       <div><div class="card-title">Time logs</div><div class="card-sub">${fl.length} record${fl.length!==1?'s':''}</div></div>
       <div class="btn-group">
         <button class="btn btn-success btn-sm" onclick="openModal('log')">+ Add</button>
-        <button class="btn btn-sm" onclick="exportCSV(logRows(getFilteredLogs()),'logs.csv')">CSV</button>
-        <button class="btn btn-primary btn-sm" onclick="exportXLSX(logRows(getFilteredLogs()),'Logs','logs.xlsx')">Excel</button>
+        <button class="btn btn-sm" onclick="exportLogsCSV()">CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="exportLogsXLSX()">Excel</button>
       </div>
     </div>
     <div class="filter-bar">
@@ -1868,8 +1892,8 @@ function adminSummary() {
     <div class="card-header">
       <div class="card-title">Hours per person</div>
       <div class="btn-group">
-        <button class="btn btn-sm" onclick="exportCSV(summaryRows(),'summary.csv')">CSV</button>
-        <button class="btn btn-primary btn-sm" onclick="exportXLSX(summaryRows(),'Summary','summary.xlsx')">Excel</button>
+        <button class="btn btn-sm" onclick="exportSummaryCSV()">CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="exportSummaryXLSX()">Excel</button>
       </div>
     </div>
     <div class="filter-bar">
@@ -1973,7 +1997,7 @@ function adminDeptReport() {
   return `<div class="card">
     <div class="card-header"><div class="card-title">Department report</div>
       <div class="btn-group">
-        <button class="btn btn-sm" onclick="exportCSV(${JSON.stringify(deptData).replace(/'/g,"&#39;").replace(/</g,'&lt;')},'dept_report.csv')">CSV</button>
+        <button class="btn btn-sm" onclick="exportDeptCSV()">CSV</button>
       </div>
     </div>
     <div class="filter-bar">
@@ -2005,6 +2029,14 @@ function adminDeptReport() {
 
 function prevWeek() { setState({schedWeekOffset: (state.schedWeekOffset||0) - 1}); }
 function nextWeek() { setState({schedWeekOffset: (state.schedWeekOffset||0) + 1}); }
+function prevCalMonth() {
+  const m = state.calMonth, y = state.calYear;
+  setState({ calMonth: m === 0 ? 11 : m - 1, calYear: m === 0 ? y - 1 : y });
+}
+function nextCalMonth() {
+  const m = state.calMonth, y = state.calYear;
+  setState({ calMonth: m === 11 ? 0 : m + 1, calYear: m === 11 ? y + 1 : y });
+}
 
 function toLocalDateStr(d) {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
@@ -2359,8 +2391,8 @@ function memberHistory() {
     <div class="card-header">
       <div><div class="card-title">My attendance history</div><div class="card-sub">Total: <strong>${totalH.toFixed(2)}h</strong> across ${logs.length} log${logs.length!==1?'s':''}</div></div>
       <div class="btn-group">
-        <button class="btn btn-sm" onclick="exportCSV(logRows(myLogs(state.user.id)),'my_history.csv')">CSV</button>
-        <button class="btn btn-primary btn-sm" onclick="exportXLSX(logRows(myLogs(state.user.id)),'My History','my_history.xlsx')">Excel</button>
+        <button class="btn btn-sm" onclick="exportMyLogsCSV()">CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="exportMyLogsXLSX()">Excel</button>
       </div>
     </div>
     <div class="tbl-wrap">
@@ -2408,9 +2440,9 @@ function memberCalendar() {
 
   return `<div class="card">
     <div class="cal-nav">
-      <button class="btn btn-sm" onclick="setState({calMonth:state.calMonth===0?11:state.calMonth-1,calYear:state.calMonth===0?state.calYear-1:state.calYear})">← Prev</button>
+      <button class="btn btn-sm" onclick="prevCalMonth()">← Prev</button>
       <div class="cal-nav-title">${monthNames[month]} ${year}</div>
-      <button class="btn btn-sm" onclick="setState({calMonth:state.calMonth===11?0:state.calMonth+1,calYear:state.calMonth===11?state.calYear+1:state.calYear})">Next →</button>
+      <button class="btn btn-sm" onclick="nextCalMonth()">Next →</button>
     </div>
     <div class="cal-grid" style="margin-bottom:10px;">
       ${dayNames.map(d=>`<div class="cal-day-hdr">${d}</div>`).join('')}
@@ -3043,12 +3075,17 @@ Object.assign(window, {
   saveShifts, changePassword,
   handlePhotoUpload, renderPwStrength,
   exportCSV, exportXLSX,
+  exportLogsCSV, exportLogsXLSX,
+  exportSummaryCSV, exportSummaryXLSX,
+  exportDeptCSV,
+  exportMyLogsCSV, exportMyLogsXLSX,
   // Notifications
   dismissNotif, dismissAllNotifs,
   // New functions
   saveScheduleRequest, approveSchedReq, dismissSchedReq, openSchedModalFromReq, addAllSchedFromReq,
   saveTeamModal, deleteTeam, toggleTeamChip, selectTeamColor,
   prevWeek, nextWeek,
+  prevCalMonth, nextCalMonth,
   startCamera, capturePhoto, retakePhoto, handleCheckinUpload, submitCheckinPhoto, closeCheckinModal,
   // Tripping
   saveTrippingModal, deleteTripping, removeTrippingApplicant,

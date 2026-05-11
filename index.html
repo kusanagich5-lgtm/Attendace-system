@@ -1039,16 +1039,128 @@ async function changePassword() {
 function exportCSV(rows, fname) {
   if (!rows.length) { showToast('Nothing to export'); return; }
   const cols = Object.keys(rows[0]);
-  const csv = [cols.join(','),...rows.map(r=>cols.map(c=>JSON.stringify(r[c]??'')).join(','))].join('\n');
-  const a = document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download=fname; a.click();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const timeStr = now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  const meta = [
+    `# ${fname.replace(/\.csv$/i,'').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())} Report`,
+    `# Generated: ${dateStr} at ${timeStr}`,
+    `# Total Records: ${rows.length}`,
+    `#`,
+  ];
+  // Escape a cell value for CSV: wrap in quotes if needed
+  const escCell = v => {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  };
+  const csvLines = [
+    ...meta,
+    cols.map(escCell).join(','),
+    ...rows.map(r => cols.map(c => escCell(r[c] ?? '')).join(','))
+  ];
+  const csv = csvLines.join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = fname;
+  a.click();
   showToast('CSV downloaded');
 }
+
 function exportXLSX(rows, sheet, fname) {
-  if (typeof XLSX==='undefined') { showToast('Library loading, retry'); return; }
+  if (typeof XLSX === 'undefined') { showToast('Library loading, retry'); return; }
   if (!rows.length) { showToast('Nothing to export'); return; }
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,sheet);
-  XLSX.writeFile(wb,fname); showToast('Excel downloaded');
+
+  const cols = Object.keys(rows[0]);
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const timeStr = now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  const reportTitle = sheet + ' Report';
+
+  // Build worksheet data: title row, meta rows, blank, header, data
+  const wsData = [
+    [reportTitle],
+    [`Generated: ${dateStr} at ${timeStr}`],
+    [`Total Records: ${rows.length}`],
+    [],
+    cols,
+    ...rows.map(r => cols.map(c => r[c] ?? ''))
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // ── Column widths: auto-fit based on header + sample data ──
+  const colWidths = cols.map(col => {
+    const maxData = rows.slice(0,50).reduce((mx,r) => Math.max(mx, String(r[col]??'').length), 0);
+    return { wch: Math.min(Math.max(col.length, maxData) + 2, 32) };
+  });
+  ws['!cols'] = colWidths;
+
+  // ── Merged title cell across all columns ──
+  ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:cols.length-1} }];
+
+  // ── Cell styles ──
+  const HEADER_ROW = 4; // 0-indexed: title=0, gen=1, total=2, blank=3, headers=4, data starts=5
+
+  // Style helpers
+  const styleTitle = { font:{bold:true,sz:14,color:{rgb:'1E3A5F'}}, fill:{fgColor:{rgb:'EBF3FB'}}, alignment:{horizontal:'left',vertical:'center'} };
+  const styleMeta  = { font:{sz:10,italic:true,color:{rgb:'6B7280'}}, alignment:{horizontal:'left'} };
+  const styleHeader = { font:{bold:true,sz:10,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'2563EB'}}, alignment:{horizontal:'left',vertical:'center'},border:{bottom:{style:'thin',color:{rgb:'1D4ED8'}}} };
+  const styleEven  = { fill:{fgColor:{rgb:'F8FAFC'}}, alignment:{vertical:'center'} };
+  const styleOdd   = { fill:{fgColor:{rgb:'FFFFFF'}}, alignment:{vertical:'center'} };
+  const styleNum   = { alignment:{horizontal:'right',vertical:'center'}, numFmt:'0.00' };
+  const numericCols = new Set(cols.filter(c => rows.some(r => typeof r[c] === 'number')));
+
+  // Apply styles row by row
+  const encode = (r,c) => XLSX.utils.encode_cell({r,c});
+
+  // Title
+  const titleCell = ws[encode(0,0)];
+  if (titleCell) titleCell.s = styleTitle;
+
+  // Meta rows (1,2)
+  [[1],[2]].forEach(([ri]) => {
+    const cell = ws[encode(ri,0)];
+    if (cell) cell.s = styleMeta;
+  });
+
+  // Header row
+  cols.forEach((_,ci) => {
+    const cell = ws[encode(HEADER_ROW,ci)];
+    if (cell) cell.s = styleHeader;
+  });
+
+  // Data rows (start at row 5)
+  rows.forEach((row,ri) => {
+    const isEven = ri%2===0;
+    cols.forEach((col,ci) => {
+      const cell = ws[encode(HEADER_ROW+1+ri,ci)];
+      if (!cell) return;
+      const base = isEven ? {...styleEven} : {...styleOdd};
+      if (numericCols.has(col) && typeof row[col]==='number') {
+        cell.s = {...base,...styleNum};
+      } else {
+        cell.s = base;
+      }
+      // Colour-code Yes/No values
+      if (cell.v === 'Yes') cell.s = {...cell.s, font:{color:{rgb:'15803D'}}, fill:{fgColor:{rgb:'F0FDF4'}}};
+      if (cell.v === 'No')  cell.s = {...cell.s, font:{color:{rgb:'9CA3AF'}}};
+    });
+  });
+
+  // Row heights
+  ws['!rows'] = [
+    {hpx:28}, // title
+    {hpx:16}, // generated
+    {hpx:16}, // total records
+    {hpx:6},  // blank
+    {hpx:22}, // header
+    ...rows.map(()=>({hpx:18}))
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheet.slice(0,31));
+  XLSX.writeFile(wb, fname);
+  showToast('Excel downloaded');
 }
 function logRows(logs) {
   return logs.map(l=>{ const p=personOf(l.personId); const hrs=ch(l.in,l.out,l.lunchOut,l.lunchIn); const lm=lunchDur(l.lunchOut,l.lunchIn); return {Name:p.name,Role:p.role,Department:p.dept,Date:l.date,Login:l.in||'','Lunch Out':l.lunchOut||'','Lunch Back':l.lunchIn||'','Lunch (min)':lm||'',Logout:l.out||'','Net Hours':hrs!==null?+hrs.toFixed(2):'',Late:isLate(l.in,l.personId,l.date)?'Yes':'No',Overtime:isOvertime(hrs)?'Yes':'No'}; });
@@ -1116,13 +1228,23 @@ function getFilteredLogs() {
 }
 
 // ─── Export wrapper functions (window-safe, no arg passing in onclick) ────
-function exportLogsCSV()    { exportCSV(logRows(getFilteredLogs()), 'logs.csv'); }
-function exportLogsXLSX()   { exportXLSX(logRows(getFilteredLogs()), 'Logs', 'logs.xlsx'); }
-function exportSummaryCSV() { exportCSV(summaryRows(), 'summary.csv'); }
-function exportSummaryXLSX(){ exportXLSX(summaryRows(), 'Summary', 'summary.xlsx'); }
-function exportDeptCSV()    { exportCSV(deptRows(), 'dept_report.csv'); }
-function exportMyLogsCSV()  { exportCSV(logRows(myLogs(state.user.id)), 'my_history.csv'); }
-function exportMyLogsXLSX() { exportXLSX(logRows(myLogs(state.user.id)), 'My History', 'my_history.xlsx'); }
+function _dateStamp() { return new Date().toISOString().split('T')[0]; }
+function exportLogsCSV() {
+  const person = state.filterPerson ? state.people.find(p=>p.id===+state.filterPerson) : null;
+  const slug = person ? person.name.toLowerCase().replace(/\s+/g,'_') : 'all';
+  exportCSV(logRows(getFilteredLogs()), `attendance_${slug}_${_dateStamp()}.csv`);
+}
+function exportLogsXLSX() {
+  const person = state.filterPerson ? state.people.find(p=>p.id===+state.filterPerson) : null;
+  const sheetName = person ? person.name.slice(0,31) : 'Attendance Logs';
+  const slug = person ? person.name.toLowerCase().replace(/\s+/g,'_') : 'all';
+  exportXLSX(logRows(getFilteredLogs()), sheetName, `attendance_${slug}_${_dateStamp()}.xlsx`);
+}
+function exportSummaryCSV() { exportCSV(summaryRows(), `attendance_summary_${_dateStamp()}.csv`); }
+function exportSummaryXLSX(){ exportXLSX(summaryRows(), 'Summary', `attendance_summary_${_dateStamp()}.xlsx`); }
+function exportDeptCSV()    { exportCSV(deptRows(), `department_report_${_dateStamp()}.csv`); }
+function exportMyLogsCSV()  { exportCSV(logRows(myLogs(state.user.id)), `my_attendance_${_dateStamp()}.csv`); }
+function exportMyLogsXLSX() { exportXLSX(logRows(myLogs(state.user.id)), 'My History', `my_attendance_${_dateStamp()}.xlsx`); }
 function deptRows() {
   const ff=state.sfFrom, ft2=state.sfTo;
   const fl = state.logs.filter(l=>(!ff||l.date>=ff)&&(!ft2||l.date<=ft2));
@@ -1841,13 +1963,16 @@ async function adminCheckin(pid, action) {
 function adminLogs() {
   const fl = getFilteredLogs();
   const personOpts = state.people.filter(p=>p.role!=='admin').map(p=>`<option value="${p.id}" ${state.filterPerson==p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  const selPerson = state.filterPerson ? state.people.find(p=>p.id===+state.filterPerson) : null;
+  const exportLabel = selPerson ? `&#8595; ${esc(selPerson.name.split(' ')[0])}` : '&#8595; Excel';
+  const exportTitle = selPerson ? `Export ${esc(selPerson.name)}'s logs` : 'Export all logs';
   return `<div class="card">
     <div class="card-header">
       <div><div class="card-title">Time logs</div><div class="card-sub">${fl.length} record${fl.length!==1?'s':''}</div></div>
       <div class="btn-group">
         <button class="btn btn-success btn-sm" onclick="openModal('log')">+ Add</button>
-        <button class="btn btn-sm" onclick="exportLogsCSV()">CSV</button>
-        <button class="btn btn-primary btn-sm" onclick="exportLogsXLSX()">Excel</button>
+        <button class="btn btn-sm" onclick="exportLogsCSV()" title="${exportTitle}">CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="exportLogsXLSX()" title="${exportTitle}">${exportLabel}</button>
       </div>
     </div>
     <div class="filter-bar">

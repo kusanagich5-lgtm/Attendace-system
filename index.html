@@ -440,7 +440,7 @@ let state = {
   calYear: _cfg?.calYear || new Date().getFullYear(),
   calMonth: _cfg?.calMonth || new Date().getMonth(),
   notifOpen: false,
-  dismissedNotifs: new Set(),
+  dismissedNotifs: (() => { try { return new Set(JSON.parse(localStorage.getItem('att_dismissed_notifs')||'[]')); } catch(e){ return new Set(); } })(),
   editPersonId: null,
   schedWeekOffset: _cfg?.schedWeekOffset || 0,
   editSchedId: null,
@@ -465,6 +465,15 @@ function setState(patch) {
 
 // ─── Bootstrap: restore session → load data ────────────────────────────────
 async function bootstrap() {
+  // Reset dismissed notifs if it's a new day
+  try {
+    const lastDay = localStorage.getItem('att_dismissed_notifs_day');
+    if (lastDay !== TODAY) {
+      localStorage.removeItem('att_dismissed_notifs');
+      localStorage.setItem('att_dismissed_notifs_day', TODAY);
+      state.dismissedNotifs = new Set();
+    }
+  } catch(e){}
   render(); // show loading screen
   try {
     const saved = JSON.parse(localStorage.getItem('att_session') || 'null');
@@ -552,51 +561,100 @@ function lateMinutes(inTime, personId, date) {
 }
 
 // ─── Notifications ─────────────────────────────────────────────────────────
-// dismissed set: keys like 'forgot_out:personId', 'schedreqs', 'leaves', 'late'
-// stored in state.dismissedNotifs (Set, not persisted — resets on page load)
 
 function getNotifications() {
   const u = state.user;
-  if (!u || u.role !== 'admin') return []; // notifications are admin-only
+  if (!u) return [];
   const dismissed = state.dismissedNotifs || new Set();
   const notifs = [];
+  const now = new Date();
+  const nowM = now.getHours()*60+now.getMinutes();
+  const [eh,em] = state.shifts.endTime.split(':').map(Number);
+  const endM = eh*60+em;
 
-  // forgot to check out
-  const forgotPeople = [];
-  state.people.filter(p=>p.role!=='admin').forEach(p=>{
-    const log = todayLog(p.id);
-    if (log && log.in && !log.out) {
-      const now = new Date();
-      const nowM = now.getHours()*60+now.getMinutes();
-      const [eh,em] = state.shifts.endTime.split(':').map(Number);
-      if (nowM > eh*60+em+30 && !dismissed.has('forgot_out:'+p.id)) {
+  if (u.role === 'admin') {
+    // ── ADMIN NOTIFICATIONS ──────────────────────────────────────
+
+    // Forgot to check out (staff past shift end + 30 min)
+    const forgotPeople = [];
+    state.people.filter(p=>p.role!=='admin').forEach(p=>{
+      const log = todayLog(p.id);
+      if (log && log.in && !log.out && nowM > endM+30 && !dismissed.has('forgot_out:'+p.id)) {
         forgotPeople.push({name:p.name, time:ft(log.in), personId:p.id});
       }
+    });
+    if (forgotPeople.length) notifs.push({type:'forgot_out', people:forgotPeople, count:forgotPeople.length, navPage:'logs'});
+
+    // Pending schedule requests
+    const pendingSchedReqs = state.scheduleRequests.filter(r=>r.status==='pending');
+    if (pendingSchedReqs.length && !dismissed.has('schedreqs'))
+      notifs.push({type:'schedreqs', count:pendingSchedReqs.length, navPage:'schedrequests'});
+
+    // Pending leave requests
+    const pendingLeaves = state.leaves.filter(l=>l.status==='pending');
+    if (pendingLeaves.length && !dismissed.has('leaves'))
+      notifs.push({type:'leaves', count:pendingLeaves.length, navPage:'leaves'});
+
+    // Late arrivals today
+    const lateToday = state.people.filter(p=>p.role!=='admin').filter(p=>{
+      const log = todayLog(p.id);
+      return log && isLate(log.in, p.id, TODAY);
+    });
+    if (lateToday.length && !dismissed.has('late'))
+      notifs.push({type:'late', names:lateToday.map(p=>p.name), count:lateToday.length, navPage:'logs'});
+
+    // No one checked in yet (past shift start + 15 min, work day)
+    const dayOfWeek = now.getDay();
+    if (dayOfWeek >= 1 && dayOfWeek <= 5 && !dismissed.has('nobody_in')) {
+      const [sh,sm] = state.shifts.startTime.split(':').map(Number);
+      if (nowM > sh*60+sm+15) {
+        const checkedIn = state.people.filter(p=>p.role!=='admin' && todayLog(p.id)?.in);
+        const total = state.people.filter(p=>p.role!=='admin').length;
+        if (total > 0 && checkedIn.length === 0)
+          notifs.push({type:'nobody_in', total, navPage:'logs'});
+      }
     }
-  });
-  if (forgotPeople.length) {
-    notifs.push({type:'forgot_out', people:forgotPeople, count:forgotPeople.length, navPage:'logs'});
-  }
 
-  // pending schedule requests
-  const pendingSchedReqs = state.scheduleRequests.filter(r=>r.status==='pending');
-  if (pendingSchedReqs.length && !dismissed.has('schedreqs')) {
-    notifs.push({type:'schedreqs', count:pendingSchedReqs.length, navPage:'schedrequests'});
-  }
+  } else {
+    // ── EMPLOYEE / INTERN NOTIFICATIONS ──────────────────────────
 
-  // pending leaves
-  const pendingLeaves = state.leaves.filter(l=>l.status==='pending');
-  if (pendingLeaves.length && !dismissed.has('leaves')) {
-    notifs.push({type:'leaves', count:pendingLeaves.length, navPage:'leaves'});
-  }
+    const myLog = todayLog(u.id);
+    const myLeaves = state.leaves.filter(l=>l.personId===u.id);
+    const myScheds = schedForDate(TODAY, u.id);
 
-  // late arrivals today
-  const lateToday = state.people.filter(p=>p.role!=='admin').filter(p=>{
-    const log = todayLog(p.id);
-    return log && isLate(log.in, p.id, TODAY);
-  });
-  if (lateToday.length && !dismissed.has('late')) {
-    notifs.push({type:'late', names:lateToday.map(p=>p.name), count:lateToday.length, navPage:'logs'});
+    // Not checked in yet (past shift start + 15 min, weekday)
+    const dayOfWeek = now.getDay();
+    if (dayOfWeek >= 1 && dayOfWeek <= 5 && !myLog?.in && !dismissed.has('user_not_in')) {
+      const [sh,sm] = state.shifts.startTime.split(':').map(Number);
+      if (nowM > sh*60+sm+15)
+        notifs.push({type:'user_not_in', startTime:ft(state.shifts.startTime), navPage:'scan'});
+    }
+
+    // Forgot to check out (past shift end + 30 min, checked in but not out)
+    if (myLog?.in && !myLog?.out && nowM > endM+30 && !dismissed.has('user_forgot_out'))
+      notifs.push({type:'user_forgot_out', inTime:ft(myLog.in), navPage:'scan'});
+
+    // Late check-in reminder (checked in late today)
+    if (myLog?.in && isLate(myLog.in, u.id, TODAY) && !dismissed.has('user_late'))
+      notifs.push({type:'user_late', mins:lateMinutes(myLog.in, u.id, TODAY), navPage:'history'});
+
+    // Leave request status updates (approved or rejected, not yet dismissed)
+    myLeaves.forEach(l => {
+      const key = 'leave_status:'+l.id;
+      if ((l.status==='approved'||l.status==='rejected') && !dismissed.has(key))
+        notifs.push({type:'leave_status', leaveId:l.id, status:l.status, leaveType:l.type, from:l.from, to:l.to, navPage:'leaves'});
+    });
+
+    // Schedule assigned today
+    if (myScheds.length && !dismissed.has('user_sched_today'))
+      notifs.push({type:'user_sched_today', schedules:myScheds, navPage:'schedule'});
+
+    // Upcoming leave starts tomorrow
+    const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate()+1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const upcomingLeave = myLeaves.find(l=>l.from===tomorrowStr&&l.status==='approved');
+    if (upcomingLeave && !dismissed.has('leave_tomorrow:'+upcomingLeave.id))
+      notifs.push({type:'leave_tomorrow', leave:upcomingLeave, navPage:'leaves'});
   }
 
   return notifs;
@@ -613,6 +671,7 @@ function dismissNotif(key) {
   } else {
     d.add(key);
   }
+  try { localStorage.setItem('att_dismissed_notifs', JSON.stringify([...d])); } catch(e){}
   setState({ dismissedNotifs: d });
 }
 
@@ -621,8 +680,11 @@ function dismissAllNotifs() {
   const d = new Set(state.dismissedNotifs || []);
   notifs.forEach(n => {
     if (n.type === 'forgot_out') n.people.forEach(p => d.add('forgot_out:'+p.personId));
+    else if (n.type === 'leave_status') d.add('leave_status:'+n.leaveId);
+    else if (n.type === 'leave_tomorrow') d.add('leave_tomorrow:'+n.leave.id);
     else d.add(n.type);
   });
+  try { localStorage.setItem('att_dismissed_notifs', JSON.stringify([...d])); } catch(e){}
   setState({ dismissedNotifs: d, notifOpen: false });
 }
 
@@ -1035,6 +1097,20 @@ async function changePassword() {
   setState({modal:null}); showToast('Password changed');
 }
 
+async function adminResetPassword() {
+  const nw = document.getElementById('rp-new')?.value.trim();
+  const cf = document.getElementById('rp-confirm')?.value.trim();
+  if (!nw || !cf) { showToast('Fill all fields'); return; }
+  if (nw !== cf) { showToast('Passwords do not match'); return; }
+  if (nw.length < 6) { showToast('Password too short (min 6 chars)'); return; }
+  const targetId = state.editPersonId;
+  if (!targetId) return;
+  const { error } = await sb.from('people').update({ pass: await hashPw(nw) }).eq('id', targetId);
+  if (error) { showToast('Error: ' + error.message); return; }
+  setState({ modal: null, editPersonId: null });
+  showToast('Password reset successfully');
+}
+
 // ─── Export ────────────────────────────────────────────────────────────────
 function exportCSV(rows, fname) {
   if (!rows.length) { showToast('Nothing to export'); return; }
@@ -1313,13 +1389,13 @@ function renderTopbar() {
       <span class="brand-name">Attendance</span>
     </div>
     <div class="topbar-right">
-      ${u.role==='admin'?`<div class="notif-btn-wrap" style="position:relative;">
+      <div class="notif-btn-wrap" style="position:relative;">
         <button class="notif-btn" onclick="setState({notifOpen:!state.notifOpen,profileOpen:false})" title="Notifications">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor" opacity=".7"/></svg>
           ${notifs.length?'<div class="notif-dot"></div>':''}
         </button>
         ${state.notifOpen?`<div style="position:fixed;inset:0;z-index:150;" onclick="setState({notifOpen:false})"></div>${renderNotifPanel(notifs)}`:''}
-      </div>`:''}
+      </div>
       <div class="user-info" style="text-align:right;">
         <div class="name">${esc(u.name)}</div>
         <div class="sub">${u.role} · ${esc(u.dept)}</div>
@@ -1347,38 +1423,62 @@ function renderTopbar() {
 }
 
 function renderNotifPanel(notifs) {
+  const u = state.user;
   const itemStyle = `display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;transition:background .1s;`;
   const bodyStyle = `flex:1;`;
   const dismissBtn = (key) => `<button onclick="event.stopPropagation();dismissNotif('${key}')" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:2px 4px;line-height:1;flex-shrink:0;margin-top:-1px;" title="Dismiss">✕</button>`;
+  const row = (icon, title, sub, navPage, dismissKey) =>
+    `<div style="${itemStyle}" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''" onclick="setState({notifOpen:false,navPage:'${navPage}'})">
+      <div style="${bodyStyle}">
+        <div class="notif-item-title">${icon} ${title}</div>
+        ${sub?`<div class="notif-item-sub">${sub}</div>`:''}
+      </div>
+      ${dismissBtn(dismissKey)}
+    </div>`;
 
   const items = notifs.map(n => {
+    // ── Admin notifications ──
     if (n.type === 'forgot_out') {
       const sub = n.people.length === 1
         ? `${esc(n.people[0].name)} checked in at ${n.people[0].time} but hasn't logged out.`
         : `${n.people.slice(0,2).map(p=>esc(p.name)).join(', ')}${n.people.length>2?` and ${n.people.length-2} more`:''} forgot to check out.`;
-      return `<div style="${itemStyle}" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''" onclick="setState({notifOpen:false,navPage:'${n.navPage}'})">
-        <div style="${bodyStyle}"><div class="notif-item-title">⚠️ Forgot to check out</div><div class="notif-item-sub">${sub}</div></div>
-        ${dismissBtn('forgot_out:group')}
-      </div>`;
+      return row('⚠️', 'Forgot to check out', sub, n.navPage, 'forgot_out:group');
     }
-    if (n.type === 'schedreqs') return `<div style="${itemStyle}" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''" onclick="setState({notifOpen:false,navPage:'${n.navPage}'})">
-      <div style="${bodyStyle}"><div class="notif-item-title">📅 Schedule requests</div><div class="notif-item-sub">${n.count} staff member${n.count>1?'s':''} sent preferred schedule requests.</div></div>
-      ${dismissBtn('schedreqs')}
-    </div>`;
-    if (n.type === 'leaves') return `<div style="${itemStyle}" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''" onclick="setState({notifOpen:false,navPage:'${n.navPage}'})">
-      <div style="${bodyStyle}"><div class="notif-item-title">📋 Pending leave requests</div><div class="notif-item-sub">${n.count} leave request${n.count>1?'s':''} need your approval.</div></div>
-      ${dismissBtn('leaves')}
-    </div>`;
-    if (n.type === 'late') return `<div style="${itemStyle}" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''" onclick="setState({notifOpen:false,navPage:'${n.navPage}'})">
-      <div style="${bodyStyle}"><div class="notif-item-title">🕐 Late arrivals today</div><div class="notif-item-sub">${n.names.slice(0,3).map(esc).join(', ')}${n.count>3?` and ${n.count-3} more`:''} arrived late.</div></div>
-      ${dismissBtn('late')}
-    </div>`;
+    if (n.type === 'schedreqs')
+      return row('📅', 'Schedule requests', `${n.count} staff member${n.count>1?'s':''} sent preferred schedule requests.`, n.navPage, 'schedreqs');
+    if (n.type === 'leaves')
+      return row('📋', 'Pending leave requests', `${n.count} leave request${n.count>1?'s':''} need your approval.`, n.navPage, 'leaves');
+    if (n.type === 'late')
+      return row('🕐', 'Late arrivals today', `${n.names.slice(0,3).map(esc).join(', ')}${n.count>3?` and ${n.count-3} more`:''} arrived late.`, n.navPage, 'late');
+    if (n.type === 'nobody_in')
+      return row('😶', 'No check-ins yet', `None of your ${n.total} staff members have checked in today.`, n.navPage, 'nobody_in');
+
+    // ── User notifications ──
+    if (n.type === 'user_not_in')
+      return row('🔔', "You haven't checked in", `Your shift started at ${n.startTime}. Tap to check in.`, n.navPage, 'user_not_in');
+    if (n.type === 'user_forgot_out')
+      return row('⚠️', 'Forgot to check out', `You checked in at ${n.inTime} but haven't logged out yet.`, n.navPage, 'user_forgot_out');
+    if (n.type === 'user_late')
+      return row('🕐', 'Late check-in', `You were ${n.mins} minute${n.mins!==1?'s':''} late today.`, n.navPage, 'user_late');
+    if (n.type === 'leave_status') {
+      const icon = n.status === 'approved' ? '✅' : '❌';
+      const label = n.status === 'approved' ? 'Leave approved' : 'Leave rejected';
+      const sub = `Your ${n.leaveType} leave (${n.from} – ${n.to}) was ${n.status}.`;
+      return row(icon, label, sub, n.navPage, 'leave_status:'+n.leaveId);
+    }
+    if (n.type === 'user_sched_today') {
+      const names = n.schedules.map(s=>esc(s.title)).slice(0,2).join(', ')+(n.schedules.length>2?'…':'');
+      return row('📆', 'Scheduled today', `You have ${n.schedules.length} item${n.schedules.length>1?'s':''}: ${names}`, n.navPage, 'user_sched_today');
+    }
+    if (n.type === 'leave_tomorrow')
+      return row('🌴', 'Leave starts tomorrow', `Your ${n.leave.type} leave begins tomorrow (${n.leave.from}).`, n.navPage, 'leave_tomorrow:'+n.leave.id);
     return '';
   }).join('');
 
+  const badgeColor = u?.role === 'admin' ? 'badge-admin' : 'badge-employee';
   return `<div class="notif-panel" onclick="event.stopPropagation()">
     <div class="notif-header" style="display:flex;align-items:center;justify-content:space-between;">
-      <span>Notifications ${notifs.length?`<span class="badge badge-admin" style="margin-left:6px;">${notifs.length}</span>`:''}</span>
+      <span>Notifications ${notifs.length?`<span class="badge ${badgeColor}" style="margin-left:6px;">${notifs.length}</span>`:''}</span>
       ${notifs.length?`<button onclick="dismissAllNotifs()" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--text-secondary);font-family:inherit;padding:2px 6px;border-radius:4px;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">Clear all</button>`:''}
     </div>
     ${notifs.length===0?'<div class="notif-empty">All clear! No alerts right now.</div>':items}
@@ -1814,6 +1914,29 @@ function renderModal() {
     </div></div>`;
   }
 
+  if (state.modal==='resetpass') {
+    const rp = state.people.find(x=>x.id===state.editPersonId);
+    if (!rp) return '';
+    return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">Reset password</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">for ${esc(rp.name)}</div>
+        </div>
+        <button class="btn btn-sm" onclick="closeModal()">✕</button>
+      </div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;padding:10px 12px;background:var(--amber-light);border:1px solid var(--amber-mid);border-radius:var(--radius-sm);">
+        ⚠️ You are setting a new password for this user. They will need to use the new password on their next login.
+      </div>
+      <div class="form-group"><label class="form-label">New password</label><input type="password" id="rp-new" class="form-input" placeholder="New password" oninput="document.getElementById('rp-pwstr').innerHTML=renderPwStrength('rp-new')"><div id="rp-pwstr"></div></div>
+      <div class="form-group"><label class="form-label">Confirm new password</label><input type="password" id="rp-confirm" class="form-input" placeholder="Repeat new password"></div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" style="flex:1" onclick="adminResetPassword()">🔑 Set new password</button>
+        <button class="btn" onclick="closeModal()">Cancel</button>
+      </div>
+    </div></div>`;
+  }
+
   if (state.modal==='changepass') {
     return `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">
       <div class="modal-header"><div class="modal-title">Change password</div><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
@@ -2060,6 +2183,7 @@ function adminPeople() {
         <td class="text-secondary">${cnt}</td>
         <td><div class="btn-group">
           <button class="btn btn-warning btn-sm" onclick="setState({modal:'editperson',editPersonId:${p.id}})">Edit</button>
+          <button class="btn btn-sm" style="background:var(--purple-light);color:var(--purple);border-color:var(--purple-mid);" onclick="setState({modal:'resetpass',editPersonId:${p.id}})">🔑 Reset PW</button>
           <button class="btn btn-danger btn-sm" onclick="removePerson(${p.id})">Remove</button>
         </div></td>
       </tr>`;
@@ -3197,7 +3321,7 @@ Object.assign(window, {
   savePersonModal, saveEditPersonModal, removePerson,
   saveLeaveModal, approveLeave, rejectLeave,
   openSchedModal, saveSchedModal, deleteSched, toggleSchedChip, getSchedSelIds,
-  saveShifts, changePassword,
+  saveShifts, changePassword, adminResetPassword,
   handlePhotoUpload, renderPwStrength,
   exportCSV, exportXLSX,
   exportLogsCSV, exportLogsXLSX,
